@@ -2,27 +2,19 @@
 
 Esta pasta contém diffs pequenos para revisar contra a cópia de referência de `pokeemerald-expansion`. Eles não são uma ROM pronta e ainda não foram compilados.
 
-## 0001 — protagonista feminina
+## Patch consolidado — início feminino em Lilycove
 
-Arquivo: [0001-force-female-player.patch](0001-force-female-player.patch)
+Arquivo: [0003-lilycove-female-prototype.patch](0003-lilycove-female-prototype.patch)
 
-- Propõe definir `gSaveBlock2Ptr->playerGender = FEMALE` durante a inicialização de uma nova partida.
-- `git apply --check` passou localmente contra o `src/new_game.c` da cópia de referência.
-- Ainda não foi compilado nem testado em emulador. Sprite da abertura, diálogos e eventos que dependem do gênero precisam de revisão.
+- Define o gênero salvo como feminino durante a inicialização de uma nova partida.
+- Altera o destino inicial do Emerald de Inside of Truck para Lilycove City Harbor, coordenadas provisórias (11, 13).
+- O diff gerado localmente passou em `git apply --check` contra `src/new_game.c` da cópia de referência.
+- Isso não valida coordenadas, scripts de evento, sprite/diálogos, respawn ou funcionamento no emulador.
 
-## 0002 — destino inicial no porto de Lilycove
+## Patches anteriores
 
-Arquivo: [0002-start-at-lilycove-harbor.patch](0002-start-at-lilycove-harbor.patch)
+Os arquivos `0001-force-female-player.patch` e `0002-start-at-lilycove-harbor.patch` são etapas anteriores separadas. Prefira testar o patch consolidado 0003 numa cópia limpa para evitar aplicar duas vezes a mesma alteração.
 
-- Propõe substituir o destino inicial de Emerald pelo mapa do porto de Lilycove, usando coordenadas provisórias.
-- O patch foi corrigido e `git apply --check` passou localmente contra o `src/new_game.c` de referência.
-- Isso só confirma que o diff se aplica ao arquivo, não que as coordenadas sejam válidas em jogo ou que os eventos estejam configurados corretamente.
-- A chegada ainda depende de uma revisão de respawn/escape warp e dos scripts iniciais do caminhão de Littleroot.
+## Limites e próximo marco
 
-## Próxima etapa
-
-Criar um fluxo de início próprio para o RPG de Coordenadora e revisar as dependências de eventos, gênero e retorno antes de tentar compilar.
-
-## Limites atuais
-
-A cópia de referência é `pokeemerald-expansion`, não uma fonte confirmada do Pokémon Quetzal Alpha 9. Os patches são experimentais e precisam ser adaptados e testados numa árvore compatível antes de gerar uma ROM jogável. Não enviar ROMs ao repositório.
+A cópia de referência é `pokeemerald-expansion`, não uma fonte confirmada do Pokémon Quetzal Alpha 9. O ambiente atual não tem `arm-none-eabi-gcc`/DevkitARM disponível, então a compilação ainda não foi executada. Antes de gerar uma ROM jogável, precisamos de uma árvore compatível, toolchain ARM, build bem-sucedido e teste em emulador. Não enviar ROMs ao repositório.
