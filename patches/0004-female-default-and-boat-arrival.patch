@@ -36,7 +36,7 @@ index 7fc7e417..28759ad3 100644
      }
  }
  
-@@ -2123,7 +2123,7 @@ static void NewGameBirchSpeech_ShowGenderMenu(void)
+@@ -2123,6 +2123,6 @@ static void NewGameBirchSpeech_ShowGenderMenu(void)
      DrawMainMenuWindowBorder(&sNewGameBirchSpeechTextWindows[1], 0xF3);
      FillWindowPixelBuffer(1, PIXEL_FILL(1));
      PrintMenuTable(1, ARRAY_COUNT(sMenuActions_Gender), sMenuActions_Gender);
