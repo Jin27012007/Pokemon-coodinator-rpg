@@ -7,12 +7,16 @@ Esta pasta contém patches pequenos para revisar contra a cópia de referência 
 Arquivo: [0001-force-female-player.patch](0001-force-female-player.patch)
 
 - Define `gSaveBlock2Ptr->playerGender = FEMALE` durante a inicialização de uma nova partida.
-- Verificação realizada: `git apply --check` passou contra `src/new_game.c` extraído da cópia de referência.
-- Não verificado: compilação, funcionamento no emulador, sprite/arte da protagonista na abertura, diálogos e eventos que dependem do gênero.
+- A revisão anterior foi feita sobre o trecho de inicialização, mas ainda é necessário validar o contexto exato numa árvore de trabalho limpa antes de aplicar o patch final.
+- Não verificado: compilação, emulador, sprite/arte da protagonista, diálogos e eventos que dependem do gênero.
 
-## Próxima etapa — chegada ao porto de Lilycove
+## 0002 — destino inicial no porto de Lilycove
 
-Não alterar somente o destino de `WarpToTruck()` às cegas. A chegada precisa configurar o respawn/escape warp e o estado inicial dos eventos; o script atual do caminhão também define flags, variáveis e um dynamic warp para Littleroot. O próximo patch deve criar um início específico para o RPG de Coordenadora e revisar os scripts de transição do porto.
+Arquivo: [0002-start-at-lilycove-harbor.patch](0002-start-at-lilycove-harbor.patch)
+
+- Propõe substituir o destino do início de Emerald pelo mapa do porto de Lilycove, em coordenadas experimentais.
+- É apenas uma primeira hipótese de destino. As coordenadas precisam ser testadas no mapa e podem exigir ajuste.
+- Não é seguro considerar a chegada completa ainda: é preciso definir respawn/escape warp, revisar o gênero salvo e configurar os eventos iniciais sem depender do script do caminhão de Littleroot.
 
 ## Limites atuais
 
