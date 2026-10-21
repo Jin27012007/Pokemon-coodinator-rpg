@@ -1,0 +1,12 @@
+--- a/data/maps/LilycoveCity_Harbor/scripts.inc
++++ b/data/maps/LilycoveCity_Harbor/scripts.inc
+@@ -1,7 +1,10 @@
+ LilycoveCity_Harbor_MapScripts::
+ 	map_script MAP_SCRIPT_ON_TRANSITION, LilycoveCity_Harbor_OnTransition
+ 	.byte 0
+ 
+ LilycoveCity_Harbor_OnTransition:
++	@ Coordinator RPG experiment: use Lilycove as the initial respawn area.
++	@ Coordinates below are provisional and must be verified in-game.
+ 	setescapewarp MAP_LILYCOVE_CITY, 12, 33
+ 	end
