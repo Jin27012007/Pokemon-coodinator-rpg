@@ -44,7 +44,7 @@ index 7fc7e417..b1f94a3f 100644
              gSprites[spriteId].invisible = FALSE;
              gSprites[spriteId].oam.objMode = ST_OAM_OBJ_BLEND;
              gTasks[taskId].tPlayerSpriteId = spriteId;
--            gTasks[taskId].tPlayerGender = MALE;
+-            gTasks[taskId].tPlayerGender = FEMALE;
 +            gTasks[taskId].tPlayerGender = FEMALE;
              NewGameBirchSpeech_StartFadeInTarget1OutTarget2(taskId, 2);
              NewGameBirchSpeech_StartFadePlatformOut(taskId, 1);
