@@ -1,8 +1,6 @@
 --- a/src/new_game.c
 +++ b/src/new_game.c
-@@ -1,5 +1,5 @@
- static void WarpToTruck(void)
- {
+@@ -136,7 +136,7 @@ static void WarpToTruck(void)
      if (IS_FRLG)
          SetWarpDestination(MAP_GROUP(MAP_PALLET_TOWN_PLAYERS_HOUSE_2F), MAP_NUM(MAP_PALLET_TOWN_PLAYERS_HOUSE_2F), WARP_ID_NONE, 6, 6);
      else
