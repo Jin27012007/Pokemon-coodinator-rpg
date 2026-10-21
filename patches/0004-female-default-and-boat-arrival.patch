@@ -88,3 +88,14 @@ index 9e3b0764..6d28dfdf 100644
      PlayTimeCounter_Reset();
      ClearPokedexFlags();
      InitEventData();
+diff --git a/src/overworld.c b/src/overworld.c
+--- a/src/overworld.c
++++ b/src/overworld.c
+@@ -1940,7 +1940,7 @@ void CB2_NewGame(void)
+ #if IS_FRLG
+         gFieldCallback = FieldCB_WarpExitFadeFromBlack;
+ #else
+-        gFieldCallback = ExecuteTruckSequence;
++        gFieldCallback = FieldCB_WarpExitFadeFromBlack;
+ #endif
+     gFieldCallback2 = NULL;
