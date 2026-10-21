@@ -91,7 +91,7 @@ index 9e3b0764..6d28dfdf 100644
 diff --git a/src/overworld.c b/src/overworld.c
 --- a/src/overworld.c
 +++ b/src/overworld.c
-@@ -1940,7 +1940,7 @@ void CB2_NewGame(void)
+@@ -1940,6 +1940,6 @@ void CB2_NewGame(void)
  #if IS_FRLG
          gFieldCallback = FieldCB_WarpExitFadeFromBlack;
  #else
