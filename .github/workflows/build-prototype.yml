@@ -34,6 +34,24 @@ jobs:
           git -C source apply --check "$GITHUB_WORKSPACE/patches/0003-lilycove-female-prototype.patch"
           git -C source apply "$GITHUB_WORKSPACE/patches/0003-lilycove-female-prototype.patch"
 
+      - name: Apply compatibility fix for GCC labels
+        working-directory: source
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("src/battle_gfx_sfx_util.c")
+          s = p.read_text()
+          s = s.replace(
+              "        case 6 ... 9:\n            enum BattlerPosition position = GetBattlerPosition((enum BattlerId)(state - 6));",
+              "        case 6 ... 9:\n            ;\n            enum BattlerPosition position = GetBattlerPosition((enum BattlerId)(state - 6));"
+          )
+          s = s.replace(
+              "        case 5:\n            enum BattlerPosition position = GetBattlerPosition((enum BattlerId)(state - 4));",
+              "        case 5:\n            ;\n            enum BattlerPosition position = GetBattlerPosition((enum BattlerId)(state - 4));"
+          )
+          p.write_text(s)
+          PY
+
       - name: Build ROM
         working-directory: source
         run: |
