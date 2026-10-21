@@ -1,20 +1,29 @@
 # Patches experimentais
 
-Esta pasta contém diffs pequenos para revisar contra a cópia de referência de `pokeemerald-expansion`. Eles não são uma ROM pronta e ainda não foram compilados.
+Esta pasta contém diffs para revisão contra a cópia de referência de `pokeemerald-expansion`. Nenhum deles é uma ROM pronta.
 
-## Patch consolidado — início feminino em Lilycove
+## 0001 — protagonista feminina
+
+Arquivo: [0001-force-female-player.patch](0001-force-female-player.patch)
+
+Propõe definir `gSaveBlock2Ptr->playerGender = FEMALE` durante a inicialização. Ainda exige compilação e testes da abertura, sprites, diálogos e eventos.
+
+## 0002 — destino no porto
+
+Arquivo: [0002-start-at-lilycove-harbor.patch](0002-start-at-lilycove-harbor.patch)
+
+Propõe substituir o destino inicial de Emerald pelo mapa do porto de Lilycove, usando coordenadas provisórias. Não configura por si só o estado de eventos, retorno ou respawn.
+
+## 0003 — patch consolidado
 
 Arquivo: [0003-lilycove-female-prototype.patch](0003-lilycove-female-prototype.patch)
 
-- Define o gênero salvo como feminino durante a inicialização de uma nova partida.
-- Altera o destino inicial do Emerald de Inside of Truck para Lilycove City Harbor, coordenadas provisórias (11, 13).
-- O diff gerado localmente passou em `git apply --check` contra `src/new_game.c` da cópia de referência.
-- Isso não valida coordenadas, scripts de evento, sprite/diálogos, respawn ou funcionamento no emulador.
+Reúne as duas mudanças anteriores. Foi corrigido depois de uma revisão detectar que a versão anterior tinha cabeçalhos de hunk inválidos. A versão atual passou localmente em `git apply --check` contra `src/new_game.c` da cópia de referência.
 
-## Patches anteriores
+Esse teste prova somente que o diff é aplicável ao arquivo. Não prova compilação nem funcionamento no emulador.
 
-Os arquivos `0001-force-female-player.patch` e `0002-start-at-lilycove-harbor.patch` são etapas anteriores separadas. Prefira testar o patch consolidado 0003 numa cópia limpa para evitar aplicar duas vezes a mesma alteração.
+## Bloqueios e próximos testes
 
-## Limites e próximo marco
+A toolchain `arm-none-eabi-gcc` não está instalada no ambiente de trabalho, então a compilação completa ainda não foi executada. Antes de gerar uma ROM, precisamos preparar a toolchain, compilar, corrigir erros, validar as coordenadas do porto e revisar flags/eventos de início, respawn e retorno.
 
-A cópia de referência é `pokeemerald-expansion`, não uma fonte confirmada do Pokémon Quetzal Alpha 9. O ambiente atual não tem `arm-none-eabi-gcc`/DevkitARM disponível, então a compilação ainda não foi executada. Antes de gerar uma ROM jogável, precisamos de uma árvore compatível, toolchain ARM, build bem-sucedido e teste em emulador. Não enviar ROMs ao repositório.
+A fonte de referência é `pokeemerald-expansion`, não uma fonte confirmada do Quetzal Alpha 9. Compatibilidade com a ROM Quetzal não está demonstrada. Não enviar ROMs ao repositório.
