@@ -36,8 +36,6 @@ jobs:
 
       - name: Build ROM
         working-directory: source
-        env:
-          CFLAGS: -std=gnu17
         run: |
           make -j2
 
