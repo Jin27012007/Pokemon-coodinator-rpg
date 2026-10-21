@@ -44,21 +44,23 @@ jobs:
           git -C source apply --check "$GITHUB_WORKSPACE/patches/0004-female-default-and-boat-arrival.patch"
           git -C source apply "$GITHUB_WORKSPACE/patches/0004-female-default-and-boat-arrival.patch"
 
-      - name: Apply compatibility fix for GCC labels
+      - name: Apply GCC compatibility fix
         working-directory: source
         run: |
           python3 - <<'PY'
           from pathlib import Path
           p = Path("src/battle_gfx_sfx_util.c")
           s = p.read_text()
-          s = s.replace(
-              "        case 6 ... 9:\\n            enum BattlerPosition position = GetBattlerPosition((enum BattlerId)(state - 6));",
-              "        case 6 ... 9:\\n            ;\\n            enum BattlerPosition position = GetBattlerPosition((enum BattlerId)(state - 6));"
-          )
-          s = s.replace(
-              "        case 5:\\n            enum BattlerPosition position = GetBattlerPosition((enum BattlerId)(state - 4));",
-              "        case 5 ... 5:\\n            ;\\n            enum BattlerPosition position = GetBattlerPosition((enum BattlerId)(state - 4));"
-          )
+          old = "        case 6 ... 9:\\n            enum BattlerPosition position = GetBattlerPosition((enum BattlerId)(state - 6));"
+          new = "        case 6 ... 9:\\n            ;\\n            enum BattlerPosition position = GetBattlerPosition((enum BattlerId)(state - 6));"
+          if old not in s:
+              raise SystemExit("Expected GCC compatibility hunk for case 6 ... 9 was not found")
+          s = s.replace(old, new, 1)
+          old = "        case 4:\\n        case 5:\\n            enum BattlerPosition position = GetBattlerPosition((enum BattlerId)(state - 4));"
+          new = "        case 4:\\n        case 5:\\n            ;\\n            enum BattlerPosition position = GetBattlerPosition((enum BattlerId)(state - 4));"
+          if old not in s:
+              raise SystemExit("Expected GCC compatibility hunk for cases 4/5 was not found")
+          s = s.replace(old, new, 1)
           p.write_text(s)
           PY
 
