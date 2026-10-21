@@ -69,3 +69,14 @@ Implicação de design: fita de Pokémon e carreira persistente da protagonista 
 - [ ] Fluxo completo de inicialização/novo jogo mapeado.
 - [ ] Persistência de progressão da Coordenadora projetada.
 - [ ] Ferramenta de compilação executada e ROM de teste validada.
+
+
+## Atualização de profundidade: observações confirmadas nos fontes
+
+- `src/new_game.c::WarpToTruck()` define o destino de warp e chama `WarpIntoMap()`. `NewGameInitData()` chama essa função antes de executar `EventScript_ResetAllMapFlags` no caminho de Emerald.
+- Em `data/maps/InsideOfTruck/scripts.inc`, `InsideOfTruck_EventScript_SetIntroFlags` verifica o gênero já salvo e separa duas rotas: cada uma define um respawn, um estado da introdução, flags para ocultar personagens/objetos e um warp dinâmico para Littleroot. Este é um motivo concreto para não apenas trocar o mapa de destino: precisamos substituir ou adaptar explicitamente essa inicialização.
+- Em `src/intro.c::Task_Scene1_Load()`, `sIntroCharacterGender` é escolhido aleatoriamente para a cena visual (Brendan/May). Isso não deve ser confundido com `gSaveBlock2Ptr->playerGender`, o campo persistente usado por diversos sistemas do jogo.
+- O fluxo atual de prêmios em `data/scripts/contest_hall.inc` chama `HasMonWonThisContestBefore`; se elegível, chama `GiveMonContestRibbon`, incrementa `GAME_STAT_RECEIVED_RIBBONS`, seta `FLAG_SYS_RIBBON_GET` e mostra diálogos de prêmio. É assim que o jogo vincula a fita ao prêmio do concurso.
+- `src/contest_util.c::GiveMonContestRibbon()` retorna se o jogador não ficou em primeiro; do contrário, incrementa o dado da fita na estrutura do Pokémon dentro dos limites de rank configurados.
+- `data/maps/LilycoveCity_Harbor/scripts.inc` inicia com uma transição que define escapewarp para a cidade. Os scripts próximos tratam ferry/tickets e têm condições de pós-jogo; esses scripts não são uma cena de chegada de barco para um jogo novo.
+- O `Makefile` indica prefixo `arm-none-eabi-` e permite apontar para `DEVKITARM`; o `INSTALL.md` descreve a compilação usando `make`. Nenhuma compilação foi executada durante esta auditoria.
