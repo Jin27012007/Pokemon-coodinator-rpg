@@ -57,7 +57,7 @@ jobs:
           )
           s = s.replace(
               "        case 5:\\n            enum BattlerPosition position = GetBattlerPosition((enum BattlerId)(state - 4));",
-              "        case 5:\\n            ;\\n            enum BattlerPosition position = GetBattlerPosition((enum BattlerId)(state - 4));"
+              "        case 5 ... 5:\\n            ;\\n            enum BattlerPosition position = GetBattlerPosition((enum BattlerId)(state - 4));"
           )
           p.write_text(s)
           PY
