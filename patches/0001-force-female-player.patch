@@ -1,6 +1,7 @@
 --- a/src/new_game.c
 +++ b/src/new_game.c
-@@
+@@ -180,6 +180,10 @@ void NewGameInitData(void)
+     gSaveBlock2Ptr->specialSaveWarpFlags = 0;
      gSaveBlock2Ptr->gcnLinkFlags = 0;
      InitPlayerTrainerId();
 +    // Coordinator RPG experiment: always start with the female protagonist.
@@ -8,3 +9,5 @@
 +    // need separate review before this can be considered a complete mod.
 +    gSaveBlock2Ptr->playerGender = FEMALE;
      PlayTimeCounter_Reset();
+     ClearPokedexFlags();
+     InitEventData();
