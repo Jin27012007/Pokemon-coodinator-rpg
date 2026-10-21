@@ -85,3 +85,17 @@ index b1f94a3f..d773fc21 100644
 +        gTasks[taskId].func = Task_NewGameBirchSpeech_WhatsYourName;
      }
  }
+
+diff --git a/src/main_menu.c b/src/main_menu.c
+index b1f94a3f..d773fc21 100644
+--- a/src/main_menu.c
++++ b/src/main_menu.c
+@@ -1508,7 +1508,8 @@ static void Task_NewGameBirchSpeech_WaitForPlayerFadeIn(u8 taskId)
+     if (gTasks[taskId].tIsDoneFadingSprites)
+     {
+         gSprites[gTasks[taskId].tPlayerSpriteId].oam.objMode = ST_OAM_OBJ_NORMAL;
+-        gTasks[taskId].func = Task_NewGameBirchSpeech_BoyOrGirl;
++        gSaveBlock2Ptr->playerGender = FEMALE;
++        gTasks[taskId].func = Task_NewGameBirchSpeech_WhatsYourName;
+     }
+ }
