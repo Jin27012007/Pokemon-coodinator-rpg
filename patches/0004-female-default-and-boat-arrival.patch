@@ -24,9 +24,10 @@ index 6127c624..ef54f850 100644
 +	walk_left
 +	walk_left
 +	step_end
- 
++
  LilycoveCity_Harbor_EventScript_FerryAttendant::
  	lock
+ 	faceplayer
 diff --git a/src/main_menu.c b/src/main_menu.c
 index 7fc7e417..28759ad3 100644
 --- a/src/main_menu.c
