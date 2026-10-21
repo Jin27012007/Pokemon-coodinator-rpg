@@ -37,7 +37,7 @@ jobs:
       - name: Build ROM
         working-directory: source
         run: |
-          make -j2
+          make -j2 CFLAGS="-std=gnu17"
 
       - name: Upload build outputs
         if: always()
