@@ -3,7 +3,7 @@ index 6127c624..ef54f850 100644
 --- a/data/maps/LilycoveCity_Harbor/scripts.inc
 +++ b/data/maps/LilycoveCity_Harbor/scripts.inc
 @@ -4,8 +4,25 @@ LilycoveCity_Harbor_MapScripts::
-
+ 
  LilycoveCity_Harbor_OnTransition:
  	setescapewarp MAP_LILYCOVE_CITY, 12, 33
 +	goto_if_unset FLAG_HIDE_LILYCOVE_HARBOR_SSTIDAL, LilycoveCity_Harbor_OnTransitionDone
@@ -14,7 +14,7 @@ index 6127c624..ef54f850 100644
 +	waitmovement 0
 +LilycoveCity_Harbor_OnTransitionDone:
  	end
-
+ 
 +LilycoveCity_Harbor_Movement_InitialArrival:
 +	walk_left
 +	walk_left
@@ -24,10 +24,9 @@ index 6127c624..ef54f850 100644
 +	walk_left
 +	walk_left
 +	step_end
-+
+ 
  LilycoveCity_Harbor_EventScript_FerryAttendant::
  	lock
- 	faceplayer
 diff --git a/src/main_menu.c b/src/main_menu.c
 index 7fc7e417..28759ad3 100644
 --- a/src/main_menu.c
@@ -38,17 +37,17 @@ index 7fc7e417..28759ad3 100644
          {
 -            u8 spriteId = gTasks[taskId].tBrendanSpriteId;
 +            u8 spriteId = gTasks[taskId].tMaySpriteId;
-
-            gSprites[spriteId].x = 180;
-            gSprites[spriteId].y = 60;
-            gSprites[spriteId].invisible = FALSE;
-            gSprites[spriteId].oam.objMode = ST_OAM_OBJ_BLEND;
-            gTasks[taskId].tPlayerSpriteId = spriteId;
+ 
+             gSprites[spriteId].x = 180;
+             gSprites[spriteId].y = 60;
+             gSprites[spriteId].invisible = FALSE;
+             gSprites[spriteId].oam.objMode = ST_OAM_OBJ_BLEND;
+             gTasks[taskId].tPlayerSpriteId = spriteId;
 -            gTasks[taskId].tPlayerGender = MALE;
 +            gTasks[taskId].tPlayerGender = FEMALE;
-            NewGameBirchSpeech_StartFadeInTarget1OutTarget2(taskId, 2);
-            NewGameBirchSpeech_StartFadePlatformOut(taskId, 1);
-            gTasks[taskId].func = Task_NewGameBirchSpeech_WaitForPlayerFadeIn;
+             NewGameBirchSpeech_StartFadeInTarget1OutTarget2(taskId, 2);
+             NewGameBirchSpeech_StartFadePlatformOut(taskId, 1);
+             gTasks[taskId].func = Task_NewGameBirchSpeech_WaitForPlayerFadeIn;
 @@ -1509,7 +1509,8 @@ static void Task_NewGameBirchSpeech_WaitForPlayerFadeIn(u8 taskId)
      if (gTasks[taskId].tIsDoneFadingSprites)
      {
@@ -58,7 +57,7 @@ index 7fc7e417..28759ad3 100644
 +        gTasks[taskId].func = Task_NewGameBirchSpeech_WhatsYourName;
      }
  }
-
+ 
 @@ -2123,7 +2124,7 @@ static void NewGameBirchSpeech_ShowGenderMenu(void)
      DrawMainMenuWindowBorder(&sNewGameBirchSpeechTextWindows[1], 0xF3);
      FillWindowPixelBuffer(1, PIXEL_FILL(1));
