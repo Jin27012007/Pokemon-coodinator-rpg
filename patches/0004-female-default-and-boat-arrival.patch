@@ -2,7 +2,7 @@ diff --git a/data/maps/LilycoveCity_Harbor/scripts.inc b/data/maps/LilycoveCity_
 index 6127c624..ef54f850 100644
 --- a/data/maps/LilycoveCity_Harbor/scripts.inc
 +++ b/data/maps/LilycoveCity_Harbor/scripts.inc
-@@ -4,8 +4,25 @@ LilycoveCity_Harbor_MapScripts::
+@@ -4,8 +4,20 @@ LilycoveCity_Harbor_MapScripts::
  
  LilycoveCity_Harbor_OnTransition:
  	setescapewarp MAP_LILYCOVE_CITY, 12, 33
@@ -66,7 +66,7 @@ index 7fc7e417..28759ad3 100644
      }
  }
  
-@@ -2123,7 +2124,7 @@ static void NewGameBirchSpeech_ShowGenderMenu(void)
+@@ -2123,7 +2123,7 @@ static void NewGameBirchSpeech_ShowGenderMenu(void)
      DrawMainMenuWindowBorder(&sNewGameBirchSpeechTextWindows[1], 0xF3);
      FillWindowPixelBuffer(1, PIXEL_FILL(1));
      PrintMenuTable(1, ARRAY_COUNT(sMenuActions_Gender), sMenuActions_Gender);
@@ -74,7 +74,6 @@ index 7fc7e417..28759ad3 100644
 +    InitMenuInUpperLeftCornerNormal(1, ARRAY_COUNT(sMenuActions_Gender), 1);
      PutWindowTilemap(1);
      CopyWindowToVram(1, COPYWIN_FULL);
- }
 diff --git a/src/new_game.c b/src/new_game.c
 index 9e3b0764..6d28dfdf 100644
 --- a/src/new_game.c
@@ -89,6 +88,7 @@ index 9e3b0764..6d28dfdf 100644
      ClearPokedexFlags();
      InitEventData();
 diff --git a/src/overworld.c b/src/overworld.c
+index 53de18c1..6b21449b 100644
 --- a/src/overworld.c
 +++ b/src/overworld.c
 @@ -1941,6 +1941,6 @@ void CB2_NewGame(void)
