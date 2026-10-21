@@ -37,7 +37,7 @@ index 7fc7e417..28759ad3 100644
          else
          {
 -            u8 spriteId = gTasks[taskId].tBrendanSpriteId;
-+            u8 spriteId = gTasks[taskId].tMaySpriteId;
++            u8 spriteId = gTasks[taskId].tBrendanSpriteId;
  
              gSprites[spriteId].x = 180;
              gSprites[spriteId].y = 60;
@@ -45,16 +45,23 @@ index 7fc7e417..28759ad3 100644
              gSprites[spriteId].oam.objMode = ST_OAM_OBJ_BLEND;
              gTasks[taskId].tPlayerSpriteId = spriteId;
 -            gTasks[taskId].tPlayerGender = MALE;
-+            gTasks[taskId].tPlayerGender = FEMALE;
++            gTasks[taskId].tPlayerGender = MALE;
              NewGameBirchSpeech_StartFadeInTarget1OutTarget2(taskId, 2);
              NewGameBirchSpeech_StartFadePlatformOut(taskId, 1);
              gTasks[taskId].func = Task_NewGameBirchSpeech_WaitForPlayerFadeIn;
-@@ -1509,7 +1509,8 @@ static void Task_NewGameBirchSpeech_WaitForPlayerFadeIn(u8 taskId)
+@@ -1509,7 +1509,15 @@ static void Task_NewGameBirchSpeech_WaitForPlayerFadeIn(u8 taskId)
      if (gTasks[taskId].tIsDoneFadingSprites)
      {
          gSprites[gTasks[taskId].tPlayerSpriteId].oam.objMode = ST_OAM_OBJ_NORMAL;
 -        gTasks[taskId].func = Task_NewGameBirchSpeech_BoyOrGirl;
++        gSprites[gTasks[taskId].tBrendanSpriteId].invisible = TRUE;
++        gSprites[gTasks[taskId].tMaySpriteId].x = 180;
++        gSprites[gTasks[taskId].tMaySpriteId].y = 60;
++        gSprites[gTasks[taskId].tMaySpriteId].invisible = FALSE;
++        gSprites[gTasks[taskId].tMaySpriteId].oam.objMode = ST_OAM_OBJ_NORMAL;
++        gTasks[taskId].tPlayerSpriteId = gTasks[taskId].tMaySpriteId;
 +        gSaveBlock2Ptr->playerGender = FEMALE;
++        NewGameBirchSpeech_ClearWindow(0);
 +        gTasks[taskId].func = Task_NewGameBirchSpeech_WhatsYourName;
      }
  }
