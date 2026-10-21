@@ -51,16 +51,16 @@ jobs:
           from pathlib import Path
           p = Path("src/battle_gfx_sfx_util.c")
           s = p.read_text()
-          old = "        case 6 ... 9:\\n            enum BattlerPosition position = GetBattlerPosition((enum BattlerId)(state - 6));"
-          new = "        case 6 ... 9:\\n            ;\\n            enum BattlerPosition position = GetBattlerPosition((enum BattlerId)(state - 6));"
-          if old not in s:
-              raise SystemExit("Expected GCC compatibility hunk for case 6 ... 9 was not found")
-          s = s.replace(old, new, 1)
-          old = "        case 4:\\n        case 5:\\n            enum BattlerPosition position = GetBattlerPosition((enum BattlerId)(state - 4));"
-          new = "        case 4:\\n        case 5:\\n            ;\\n            enum BattlerPosition position = GetBattlerPosition((enum BattlerId)(state - 4));"
-          if old not in s:
-              raise SystemExit("Expected GCC compatibility hunk for cases 4/5 was not found")
-          s = s.replace(old, new, 1)
+          s, n1 = __import__("re").subn(
+              r"(case 6 \.\.\. 9:\n)([ ]+)(enum BattlerPosition position = GetBattlerPosition\(\(enum BattlerId\)\(state - 6\)\);)",
+              r"\1\2;\n\2\3", s, count=1
+          )
+          s, n2 = __import__("re").subn(
+              r"(case 4:\n[ ]+case 5:\n)([ ]+)(enum BattlerPosition position = GetBattlerPosition\(\(enum BattlerId\)\(state - 4\)\);)",
+              r"\1\2;\n\2\3", s, count=1
+          )
+          if n1 != 1 or n2 != 1:
+              raise SystemExit(f"Expected GCC compatibility edits once each, got case 6...9={n1}, cases 4/5={n2}")
           p.write_text(s)
           PY
 
