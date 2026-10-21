@@ -9,7 +9,7 @@ O protótipo jogável desta branch é baseado no `rh-hideout/pokeemerald-expansi
 ## Etapa 1 — Início em Lilycove
 
 - [x] Mudar o ponto inicial para o porto de Lilycove.
-- [x] Exibir May na apresentação de início e deixar a opção feminina selecionada por padrão.
+- [x] Exibir May na apresentação de início e remover a tela de escolha de gênero; o fluxo segue diretamente para a inserção do nome com gênero feminino.
 - [x] Preparar uma animação simples do S.S. Tidal chegando ao cais.
 - [x] Compilar uma ROM de teste no GitHub Actions.
 - [ ] Testar visualmente a apresentação, a chegada do barco, a navegação pelo porto, save/load e o ferry normal em um emulador.
