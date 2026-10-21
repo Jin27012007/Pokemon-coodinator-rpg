@@ -1,4 +1,4 @@
-name: Build experimental prototype
+name: Build base Lilycove prototype (legacy)
 
 on:
   workflow_dispatch:
@@ -6,7 +6,7 @@ on:
     branches:
       - experimental/pokeemerald-reference
     paths:
-      - "patches/**"
+      - "patches/0003-lilycove-female-prototype.patch"
       - ".github/workflows/build-prototype.yml"
 
 permissions:
