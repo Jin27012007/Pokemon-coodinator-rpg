@@ -26,8 +26,11 @@ jobs:
 
       - name: Download reference source
         run: |
-          git clone https://github.com/rh-hideout/pokeemerald-expansion.git source
-          git -C source checkout f4dc700a130330fd2f9325a17bbb1e2d91dbf091
+          mkdir source
+          git -C source init
+          git -C source remote add origin https://github.com/rh-hideout/pokeemerald-expansion.git
+          git -C source fetch --depth 1 origin f4dc700a130330fd2f9325a17bbb1e2d91dbf091
+          git -C source checkout --detach FETCH_HEAD
           git -C source rev-parse HEAD | tee source-revision.txt
 
       - name: Verify source revision
