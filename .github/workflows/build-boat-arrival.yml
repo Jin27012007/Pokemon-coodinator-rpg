@@ -30,6 +30,10 @@ jobs:
           git -C source checkout f4dc700a130330fd2f9325a17bbb1e2d91dbf091
           git -C source rev-parse HEAD | tee source-revision.txt
 
+      - name: Verify source revision
+        working-directory: source
+        run: test "$(git rev-parse HEAD)" = "f4dc700a130330fd2f9325a17bbb1e2d91dbf091"
+
       - name: Apply Lilycove start patch
         run: |
           git -C source apply --check "$GITHUB_WORKSPACE/patches/0003-lilycove-female-prototype.patch"
