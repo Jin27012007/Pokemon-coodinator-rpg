@@ -1,4 +1,4 @@
-name: Build female-default boat-arrival prototype
+name: Build minimal Lilycove start (boat event isolated)
 
 on:
   workflow_dispatch:
@@ -37,7 +37,7 @@ jobs:
         working-directory: source
         run: test "$(git rev-parse HEAD)" = "f4dc700a130330fd2f9325a17bbb1e2d91dbf091"
 
-      - name: Apply Lilycove start patch
+      - name: Apply minimal Lilycove start patch
         run: |
           git -C source apply --check "$GITHUB_WORKSPACE/patches/0003-lilycove-female-prototype.patch"
           git -C source apply "$GITHUB_WORKSPACE/patches/0003-lilycove-female-prototype.patch"
@@ -52,12 +52,12 @@ jobs:
           p = Path("src/battle_gfx_sfx_util.c")
           s = p.read_text()
           s = s.replace(
-              "        case 6 ... 9:\n            enum BattlerPosition position = GetBattlerPosition((enum BattlerId)(state - 6));",
-              "        case 6 ... 9:\n            ;\n            enum BattlerPosition position = GetBattlerPosition((enum BattlerId)(state - 6));"
+              "        case 6 ... 9:\\n            enum BattlerPosition position = GetBattlerPosition((enum BattlerId)(state - 6));",
+              "        case 6 ... 9:\\n            ;\\n            enum BattlerPosition position = GetBattlerPosition((enum BattlerId)(state - 6));"
           )
           s = s.replace(
-              "        case 5:\n            enum BattlerPosition position = GetBattlerPosition((enum BattlerId)(state - 4));",
-              "        case 5:\n            ;\n            enum BattlerPosition position = GetBattlerPosition((enum BattlerId)(state - 4));"
+              "        case 5:\\n            enum BattlerPosition position = GetBattlerPosition((enum BattlerId)(state - 4));",
+              "        case 5:\\n            ;\\n            enum BattlerPosition position = GetBattlerPosition((enum BattlerId)(state - 4));"
           )
           p.write_text(s)
           PY
