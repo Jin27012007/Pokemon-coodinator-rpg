@@ -26,7 +26,8 @@ jobs:
 
       - name: Download reference source
         run: |
-          git clone --depth 1 https://github.com/rh-hideout/pokeemerald-expansion.git source
+          git clone https://github.com/rh-hideout/pokeemerald-expansion.git source
+          git -C source checkout f4dc700a130330fd2f9325a17bbb1e2d91dbf091
           git -C source rev-parse HEAD | tee source-revision.txt
 
       - name: Apply Lilycove start patch
