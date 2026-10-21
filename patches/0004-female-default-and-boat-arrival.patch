@@ -91,11 +91,11 @@ index 9e3b0764..6d28dfdf 100644
 diff --git a/src/overworld.c b/src/overworld.c
 --- a/src/overworld.c
 +++ b/src/overworld.c
-@@ -1940,6 +1940,6 @@ void CB2_NewGame(void)
- #if IS_FRLG
+@@ -1941,6 +1941,6 @@ void CB2_NewGame(void)
+     if (IS_FRLG)
          gFieldCallback = FieldCB_WarpExitFadeFromBlack;
- #else
+     else
 -        gFieldCallback = ExecuteTruckSequence;
 +        gFieldCallback = FieldCB_WarpExitFadeFromBlack;
- #endif
      gFieldCallback2 = NULL;
+     DoMapLoadLoop(&gMain.state);
