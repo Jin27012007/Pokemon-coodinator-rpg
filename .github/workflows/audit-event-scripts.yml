@@ -37,7 +37,7 @@ jobs:
 
       - name: Run heuristic audit
         working-directory: source
-        run: python3 tools/audit_event_script_refs.py | tee event-script-audit.txt
+        run: set -o pipefail; python3 tools/audit_event_script_refs.py | tee event-script-audit.txt
 
       - name: Apply narrow GCC compatibility shim
         working-directory: source
