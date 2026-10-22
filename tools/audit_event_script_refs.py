@@ -198,6 +198,7 @@ def main() -> int:
     common_counts = Counter(LABEL.findall(common))
     common_duplicates = sorted(k for k,v in common_counts.items() if v > 1)
 
+    movement_terminator_findings = []
     # Movement scripts normally finish with step_end. Sentinels used to delimit
     # the follower-safe movement range are labels, not executable movements.
     for label, definitions in label_bodies.items():
