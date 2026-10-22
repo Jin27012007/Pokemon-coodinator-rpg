@@ -7,7 +7,7 @@ edit or remove scripts and is not a complete parser of the event language.
 from __future__ import annotations
 import json
 import re
-from collections import Counter, defaultdict
+from collections import Counter, defaultdict, deque
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -21,6 +21,8 @@ VARS_FRLG = ROOT / "include/constants/vars_frlg.h"
 
 LABEL = re.compile(r"^\s*([A-Za-z_][A-Za-z0-9_]*)\s*::?\s*(?:@.*)?$", re.M)
 FLOW = re.compile(r"^\s*(goto|call|goto_if_[A-Za-z0-9_]+|call_if_[A-Za-z0-9_]+|map_script)\s+([^\n@]+)", re.M)
+CASE_REF = re.compile(r"^\s*case\s+[^,\n]+,\s*([A-Za-z_][A-Za-z0-9_]*)", re.M)
+MAP_HOOK = re.compile(r"^\s*map_script\s+(MAP_SCRIPT_[A-Z0-9_]+)\s*,\s*([A-Za-z_][A-Za-z0-9_]*)", re.M)
 FLAG_NAME = re.compile(r"\b(FLAG_[A-Z0-9_]+)\b")
 VAR_NAME = re.compile(r"\b(VAR_[A-Z0-9_]+)\b")
 IGNORED = {"TRUE", "FALSE", "YES", "NO", "MULTI_B_PRESSED", "NULL", "null", "0", "0x0"}
@@ -28,6 +30,19 @@ NON_LABEL_FLOW_MACROS = {
     "call_if_defeated", "call_if_not_defeated",
     "goto_if_defeated", "goto_if_not_defeated",
 }
+# These tags are executed immediately by the pinned engine. ON_FRAME_TABLE is
+# intentionally excluded because it uses the global script context and yields.
+SYNCHRONOUS_HOOKS = {
+    "MAP_SCRIPT_ON_LOAD", "MAP_SCRIPT_ON_TRANSITION", "MAP_SCRIPT_ON_RESUME",
+    "MAP_SCRIPT_ON_RETURN_TO_FIELD", "MAP_SCRIPT_ON_DIVE_WARP",
+    "MAP_SCRIPT_ON_WARP_INTO_MAP_TABLE",
+}
+BLOCKING_COMMANDS = {
+    "waitmovement", "waitmovementat", "waitmovementall", "waitstate", "waitse",
+    "waitfanfare", "waitmessage", "waitbuttonpress", "waitdooranim",
+    "waitfieldeffect", "waitmoncry",
+}
+COMMAND_RE = re.compile(r"^\s*([A-Za-z_][A-Za-z0-9_]*)\b([^\n@]*)", re.M)
 
 def read(path: Path) -> str:
     try:
@@ -73,13 +88,30 @@ def strip_comments(text: str) -> str:
         out.append(line[:cut])
     return "\n".join(out)
 
-def occurrences(symbol: str, sources: dict[str, str], pattern: re.Pattern) -> list[str]:
+def split_labels(path: Path, text: str) -> list[tuple[str, str, int]]:
+    matches = list(LABEL.finditer(text))
     result = []
-    for name, text in sources.items():
-        for match in pattern.finditer(text):
-            if match.group(1) == symbol:
-                result.append(f"{name}:{text[:match.start()].count(chr(10)) + 1}")
-    return result[:12]
+    rel = str(path.relative_to(ROOT))
+    for i, match in enumerate(matches):
+        end = matches[i + 1].start() if i + 1 < len(matches) else len(text)
+        body = text[match.end():end]
+        result.append((match.group(1), body, text[:match.start()].count("\n") + 1))
+    return result
+
+def flow_targets(body: str, all_labels: set[str]) -> set[str]:
+    targets = set()
+    for match in FLOW.finditer(body):
+        op, args = match.group(1), match.group(2).strip()
+        if op == "map_script" or op in NON_LABEL_FLOW_MACROS:
+            continue
+        target = args.split(",")[-1].strip().split()[0] if args else ""
+        if target in all_labels:
+            targets.add(target)
+    for match in CASE_REF.finditer(body):
+        target = match.group(1)
+        if target in all_labels:
+            targets.add(target)
+    return targets
 
 def main() -> int:
     if not MAPS.is_dir():
@@ -97,17 +129,24 @@ def main() -> int:
     clean_texts = {p: strip_comments(txt) for p, txt in raw_texts.items()}
     clean_shared = {p: strip_comments(txt) for p, txt in raw_shared.items()}
 
-    labels: dict[str, list[str]] = defaultdict(list)
+    label_locations: dict[str, list[str]] = defaultdict(list)
+    label_bodies: dict[str, list[tuple[str, str, int]]] = defaultdict(list)
+    map_hooks: list[tuple[str, str, str]] = []
     for p, txt in list(clean_texts.items()) + list(clean_shared.items()):
-        for label in LABEL.findall(txt):
-            labels[label].append(str(p.relative_to(ROOT)))
+        rel = str(p.relative_to(ROOT))
+        for label, body, line in split_labels(p, txt):
+            label_locations[label].append(rel)
+            label_bodies[label].append((rel, body, line))
+        if p in clean_texts:
+            for hook in MAP_HOOK.finditer(txt):
+                map_hooks.append((rel, hook.group(1), hook.group(2)))
 
     common = strip_comments(read(COMMON))
     common_labels = set(LABEL.findall(common))
-    all_labels = set(labels) | common_labels
+    all_labels = set(label_locations) | common_labels
     all_text = "\n".join(clean_texts.values()) + "\n" + "\n".join(clean_shared.values()) + "\n" + common
 
-    duplicates = {k:v for k,v in labels.items() if len(v) > 1}
+    duplicates = {k:v for k,v in label_locations.items() if len(v) > 1}
     cross_file_duplicates = {k:v for k,v in duplicates.items() if len(set(v)) > 1}
     same_file_duplicates = {k:v for k,v in duplicates.items() if len(set(v)) == 1}
     common_counts = Counter(LABEL.findall(common))
@@ -118,11 +157,48 @@ def main() -> int:
         rel = str(p.relative_to(ROOT))
         for m in FLOW.finditer(txt):
             op, args = m.group(1), m.group(2).strip()
-            if op in NON_LABEL_FLOW_MACROS:
+            if op == "map_script" or op in NON_LABEL_FLOW_MACROS:
                 continue
             target = args.split(",")[-1].strip().split()[0] if args else ""
             if target and re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", target) and target not in all_labels and target not in IGNORED:
                 unresolved.append((rel, txt[:m.start()].count("\n")+1, op, target))
+
+    # Look through reachable script calls from synchronous map hooks for waits
+    # that need a live field-frame update. This is a conservative call-graph pass.
+    blocking_hook_findings = []
+    hook_count = 0
+    table_hook_reviews = 0
+    for map_path, tag, target in map_hooks:
+        if tag not in SYNCHRONOUS_HOOKS:
+            continue
+        roots = []
+        if tag == "MAP_SCRIPT_ON_WARP_INTO_MAP_TABLE":
+            table_hook_reviews += 1
+            for _, table_body, _ in label_bodies.get(target, []):
+                # The table stores script pointers as .4byte entries.
+                for ptr in re.findall(r"^\s*\.4byte\s+([A-Za-z_][A-Za-z0-9_]*)", table_body, re.M):
+                    if ptr in all_labels:
+                        roots.append(ptr)
+        elif target in all_labels:
+            roots.append(target)
+        for root in roots:
+            hook_count += 1
+            queue = deque([(root, (root,))])
+            seen = set()
+            while queue:
+                label, chain = queue.popleft()
+                if label in seen:
+                    continue
+                seen.add(label)
+                for src_path, body, start_line in label_bodies.get(label, []):
+                    for command in COMMAND_RE.finditer(body):
+                        command_name = command.group(1).lower()
+                        if command_name in BLOCKING_COMMANDS:
+                            line_no = start_line + body[:command.start()].count("\n")
+                            blocking_hook_findings.append((map_path, tag, root, src_path, line_no, command_name, " -> ".join(chain)))
+                    for next_label in flow_targets(body, all_labels):
+                        if next_label not in seen:
+                            queue.append((next_label, chain + (next_label,)))
 
     flag_defs = defs(FLAGS, "FLAG_") | defs(FLAGS_FRLG, "FLAG_")
     var_defs = defs(VARS, "VAR_") | defs(VARS_FRLG, "VAR_")
@@ -159,7 +235,7 @@ def main() -> int:
     print(f"scripts.inc files: {len(files)}")
     print(f"map.json files: {len(maps)}")
     print(f"shared scripts files: {len(shared_files)}")
-    print(f"map/shared labels indexed: {len(labels)}")
+    print(f"map/shared labels indexed: {len(label_locations)}")
     print(f"labels in data/event_scripts.s itself: {len(common_labels)}")
     print(f"duplicate map/shared labels: {len(duplicates)}")
     print(f"  cross-file duplicate candidates: {len(cross_file_duplicates)}")
@@ -171,6 +247,9 @@ def main() -> int:
     print(f"invalid JSON files: {len(json_errors)}")
     print(f"object script references needing review: {len(object_script_review)}")
     print(f"duplicate map IDs: {len(dup_ids)}")
+    print(f"synchronous map hook roots inspected: {hook_count}")
+    print(f"ON_WARP_INTO_MAP_TABLE roots manually discovered: {table_hook_reviews}")
+    print(f"blocking-command candidates reachable from synchronous hooks: {len(blocking_hook_findings)}")
 
     for name, locations in sorted(cross_file_duplicates.items()):
         print("CROSS_FILE_DUPLICATE_LABEL", name, "=>", ", ".join(locations))
@@ -181,16 +260,18 @@ def main() -> int:
     for row in unresolved[:250]:
         print("UNRESOLVED_CANDIDATE", *row)
     for name in unknown_flags[:200]:
-        print("FLAG_NOT_IN_SELECTED_HEADERS", name, "occurrences:", ", ".join(occurrences(name, symbol_sources, FLAG_NAME)))
+        print("FLAG_NOT_IN_SELECTED_HEADERS", name)
     for name in unknown_vars[:200]:
-        print("VAR_NOT_IN_SELECTED_HEADERS", name, "occurrences:", ", ".join(occurrences(name, symbol_sources, VAR_NAME)))
+        print("VAR_NOT_IN_SELECTED_HEADERS", name)
     for row in json_errors[:100]:
         print("INVALID_JSON", *row)
     for row in object_script_review[:250]:
         print("OBJECT_SCRIPT_REVIEW", *row)
+    for row in blocking_hook_findings[:250]:
+        print("BLOCKING_SYNC_HOOK_CANDIDATE", *row)
     for name in dup_ids:
         print("DUPLICATE_MAP_ID", name)
-    print("Potential false positives remain for preprocessor branches, generated constants, macros, native-C references, and complex switch syntax. Review every report; do not auto-delete.")
+    print("Limitations: conditional branches, pointer tables, generated constants, native-C effects, and fallthrough are only partially modeled. All candidates require review; this tool must never auto-delete or modify events.")
     return 0
 
 if __name__ == "__main__":
