@@ -222,12 +222,14 @@ def main() -> int:
                         line_no = start_line + body[:command.start()].count("\n")
                         if command_name in BLOCKING_COMMANDS:
                             blocking_hook_findings.append((map_path, tag, root, src_path, line_no, command_name, " -> ".join(chain)))
-                        elif command_name in ASYNC_RISK_COMMANDS:
-                            async_hook_findings.append((map_path, tag, root, src_path, line_no, command_name, " -> ".join(chain)))
                         elif command_name == "special":
                             special_name = args.split()[0] if args else ""
                             if special_name in special_waits:
                                 blocking_hook_findings.append((map_path, tag, root, src_path, line_no, "special(waitstate=1):" + special_name, " -> ".join(chain)))
+                            else:
+                                async_hook_findings.append((map_path, tag, root, src_path, line_no, command_name + ":" + special_name, " -> ".join(chain)))
+                        elif command_name in ASYNC_RISK_COMMANDS:
+                            async_hook_findings.append((map_path, tag, root, src_path, line_no, command_name, " -> ".join(chain)))
                     for next_label in flow_targets(body, all_labels):
                         if next_label not in seen:
                             queue.append((next_label, chain + (next_label,)))
