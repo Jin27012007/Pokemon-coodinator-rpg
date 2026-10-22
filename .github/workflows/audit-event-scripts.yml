@@ -7,6 +7,7 @@ on:
       - experimental/pokeemerald-reference
     paths:
       - "tools/audit_event_script_refs.py"
+      - "tests/**"
       - "docs/AUDITORIA_GLOBAL_EVENTOS.md"
       - ".github/workflows/audit-event-scripts.yml"
       - "patches/**"
