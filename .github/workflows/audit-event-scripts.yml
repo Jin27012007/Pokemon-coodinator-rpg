@@ -33,7 +33,9 @@ jobs:
 
       - name: Fetch pinned pokeemerald-expansion source
         run: |
-          git clone --no-checkout https://github.com/rh-hideout/pokeemerald-expansion.git source
+          mkdir source
+          git -C source init
+          git -C source remote add origin https://github.com/rh-hideout/pokeemerald-expansion.git
           git -C source fetch --depth 1 origin f4dc700a130330fd2f9325a17bbb1e2d91dbf091
           git -C source checkout --detach FETCH_HEAD
           test "$(git -C source rev-parse HEAD)" = "f4dc700a130330fd2f9325a17bbb1e2d91dbf091"
@@ -79,7 +81,9 @@ jobs:
 
       - name: Fetch pinned pokeemerald-expansion source
         run: |
-          git clone --no-checkout https://github.com/rh-hideout/pokeemerald-expansion.git source
+          mkdir source
+          git -C source init
+          git -C source remote add origin https://github.com/rh-hideout/pokeemerald-expansion.git
           git -C source fetch --depth 1 origin f4dc700a130330fd2f9325a17bbb1e2d91dbf091
           git -C source checkout --detach FETCH_HEAD
           test "$(git -C source rev-parse HEAD)" = "f4dc700a130330fd2f9325a17bbb1e2d91dbf091"
