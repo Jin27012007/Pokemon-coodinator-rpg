@@ -111,13 +111,22 @@ def split_labels(path: Path, text: str) -> list[tuple[str, str, int]]:
         result.append((match.group(1), body, text[:match.start()].count("\n") + 1))
     return result
 
+def flow_target(op: str, args: str) -> str:
+    args = args.strip()
+    if not args:
+        return ""
+    # These macros take trainer ID and label as whitespace-separated operands.
+    if op in NON_LABEL_FLOW_MACROS:
+        return args.split()[-1].strip(",")
+    return args.split(",")[-1].strip().split()[0]
+
 def flow_targets(body: str, all_labels: set[str]) -> set[str]:
     targets = set()
     for match in FLOW.finditer(body):
         op, args = match.group(1), match.group(2).strip()
-        if op == "map_script" or op in NON_LABEL_FLOW_MACROS:
+        if op == "map_script":
             continue
-        target = args.split(",")[-1].strip().split()[0] if args else ""
+        target = flow_target(op, args)
         if target in all_labels:
             targets.add(target)
     for match in CASE_REF.finditer(body):
@@ -173,9 +182,9 @@ def main() -> int:
         rel = str(p.relative_to(ROOT))
         for m in FLOW.finditer(txt):
             op, args = m.group(1), m.group(2).strip()
-            if op == "map_script" or op in NON_LABEL_FLOW_MACROS:
+            if op == "map_script":
                 continue
-            target = args.split(",")[-1].strip().split()[0] if args else ""
+            target = flow_target(op, args)
             if target and re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", target) and target not in all_labels and target not in IGNORED:
                 unresolved.append((rel, txt[:m.start()].count("\n")+1, op, target))
 
