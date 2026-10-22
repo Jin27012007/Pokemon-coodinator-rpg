@@ -1,0 +1,4 @@
+# Canonical patch stack used by the experimental build and event audit.
+# Apply in order against the pinned pokeemerald-expansion revision.
+patches/0003-lilycove-female-prototype.patch
+patches/0004-female-default-and-boat-arrival.patch

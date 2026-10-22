@@ -6,6 +6,8 @@ on:
     branches:
       - experimental/pokeemerald-reference
     paths:
+      - "patches/ACTIVE_PATCHES.txt"
+      - "patches/0003-lilycove-female-prototype.patch"
       - "patches/0004-female-default-and-boat-arrival.patch"
       - ".github/workflows/build-boat-arrival.yml"
 
@@ -37,12 +39,15 @@ jobs:
         working-directory: source
         run: test "$(git rev-parse HEAD)" = "f4dc700a130330fd2f9325a17bbb1e2d91dbf091"
 
-      - name: Apply minimal Lilycove start patch
+      - name: Apply active experimental patch stack
         run: |
-          git -C source apply --check "$GITHUB_WORKSPACE/patches/0003-lilycove-female-prototype.patch"
-          git -C source apply "$GITHUB_WORKSPACE/patches/0003-lilycove-female-prototype.patch"
-          git -C source apply --check "$GITHUB_WORKSPACE/patches/0004-female-default-and-boat-arrival.patch"
-          git -C source apply "$GITHUB_WORKSPACE/patches/0004-female-default-and-boat-arrival.patch"
+          while IFS= read -r patch || [[ -n "$patch" ]]; do
+            case "$patch" in ""|\#*) continue ;; esac
+            test -f "$GITHUB_WORKSPACE/$patch"
+            echo "Applying $patch"
+            git -C source apply --check "$GITHUB_WORKSPACE/$patch"
+            git -C source apply "$GITHUB_WORKSPACE/$patch"
+          done < "$GITHUB_WORKSPACE/patches/ACTIVE_PATCHES.txt"
 
       - name: Apply GCC compatibility fix
         working-directory: source

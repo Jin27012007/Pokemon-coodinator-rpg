@@ -9,6 +9,7 @@ on:
       - "tools/audit_event_script_refs.py"
       - "docs/AUDITORIA_GLOBAL_EVENTOS.md"
       - ".github/workflows/audit-event-scripts.yml"
+      - "patches/**"
 
 concurrency:
   group: event-script-audit-${{ github.ref }}
@@ -35,6 +36,16 @@ jobs:
           git -C source fetch --depth 1 origin f4dc700a130330fd2f9325a17bbb1e2d91dbf091
           git -C source checkout --detach FETCH_HEAD
           test "$(git -C source rev-parse HEAD)" = "f4dc700a130330fd2f9325a17bbb1e2d91dbf091"
+
+      - name: Apply active experimental patch stack
+        run: |
+          while IFS= read -r patch || [[ -n "$patch" ]]; do
+            case "$patch" in ""|\#*) continue ;; esac
+            test -f "$GITHUB_WORKSPACE/$patch"
+            echo "Applying $patch"
+            git -C source apply --check "$GITHUB_WORKSPACE/$patch"
+            git -C source apply "$GITHUB_WORKSPACE/$patch"
+          done < "$GITHUB_WORKSPACE/patches/ACTIVE_PATCHES.txt"
 
       - name: Copy audit tool into source tree
         run: cp tools/audit_event_script_refs.py source/tools/audit_event_script_refs.py
@@ -64,7 +75,7 @@ jobs:
           p.write_text(s)
           PY
 
-      - name: Compile full pinned ROM (validates assembled scripts and symbols)
+      - name: Compile full patched pinned ROM (validates assembled scripts and symbols)
         working-directory: source
         run: make -j2 CFLAGS="-std=gnu17"
 

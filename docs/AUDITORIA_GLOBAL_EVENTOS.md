@@ -18,7 +18,7 @@ A árvore Git da revisão upstream contém 34.155 entradas e não está truncada
 - tipos de gatilho documentados em `include/constants/map_scripts.h`;
 - IDs/flags/variáveis declarados em cabeçalhos de `include/constants/`.
 
-A contagem é um inventário de arquivos, não 100% de análise semântica. A engine também contém scripts nativos em C, scripts de batalha e macros/recursos gerados que não podem ser validados apenas procurando labels em arquivos `.inc`.
+A contagem é um inventário de arquivos, não 100% de análise semântica. O build experimental aplica a pilha canônica listada em `patches/ACTIVE_PATCHES.txt` antes de executar o scanner e compilar, para que os scripts alterados pelo projeto também entrem na análise. A engine também contém scripts nativos em C, scripts de batalha e macros/recursos gerados que não podem ser validados apenas procurando labels em arquivos `.inc`.
 
 ## Ordem de execução dos gatilhos de mapa
 
@@ -59,9 +59,9 @@ Macros em `asm/macros/event.inc` definem operações como `call`, `goto`, `goto_
 
 ## Scanner estático adicionado
 
-Foi incluído `tools/audit_event_script_refs.py`. Ele cobre scripts de mapa, scripts compartilhados, labels no agregador global e referências declaradas em `map.json`; confere labels/chamadas, flags/vars (incluindo cabeçalhos de configuração), movimentos, specials, referências de scripts de eventos, conexões/warps e IDs locais/IDs de mapa. O analisador do grafo de gatilhos síncronos também percorre chamadas alcançáveis e identifica esperas que dependem de quadros, operações de contexto, warps/natives e macros de evento que se expandem para essas famílias de comandos. O comando `callstd` (usado por macros como mensagens) é classificado para revisão de contexto.
+Foi incluído `tools/audit_event_script_refs.py`. O workflow aplica primeiro a pilha de patches ativa e roda o scanner nessa árvore. Ele cobre scripts de mapa, scripts compartilhados, labels no agregador global e referências declaradas em `map.json`; confere labels/chamadas, flags/vars (incluindo cabeçalhos de configuração), movimentos, specials, referências de scripts de eventos, conexões/warps e IDs locais/IDs de mapa. O analisador do grafo de gatilhos síncronos também percorre chamadas alcançáveis e identifica esperas que dependem de quadros, operações de contexto, warps/natives e macros de evento que se expandem para essas famílias de comandos. O comando `callstd` (usado por macros como mensagens) é classificado para revisão de contexto.
 
-**Limitação explícita:** esse scanner é heurístico, não um parser completo da linguagem de eventos. Pode emitir falsos positivos por macros, constantes geradas, includes compartilhados e scripts nativos em C. Não edita nem apaga eventos automaticamente e não deve bloquear builds até a saída ser calibrada e revisada.
+**Limitação explícita:** esse scanner é heurístico, não um parser completo da linguagem de eventos. Pode emitir falsos positivos por ramos condicionais, constantes geradas, includes compartilhados, macros complexas e scripts nativos em C. Não edita nem apaga eventos automaticamente. Alertas não bloqueiam a compilação por si só, mas falhas do próprio scanner interrompem o job para evitar relatórios vazios apresentados como sucesso.
 
 ## Estado da auditoria
 
@@ -70,12 +70,13 @@ Foi incluído `tools/audit_event_script_refs.py`. Ele cobre scripts de mapa, scr
 - [x] Arquivos centrais da engine, macros, tabela de comandos e gatilhos identificados.
 - [x] Primeiro caso real de conflito (chegada do barco no callback de transição) documentado.
 - [x] Scanner heurístico inicial adicionado ao branch.
-- [ ] Executar o scanner contra uma checkout completa da revisão upstream e categorizar falsos positivos.
+- [ ] Executar e calibrar o scanner sobre a checkout completa com a pilha de patches ativa; revisar manualmente os alertas de macros e contextos síncronos.
 - [ ] Fazer verificação de fluxo mais robusta para todas as labels de eventos.
 - [ ] Verificar sistematicamente referências de flags/variáveis/LOCALIDs e comandos de espera.
 - [ ] Revisar todos os scripts nativos em C e pontos onde o motor chama scripts de mapa.
-- [ ] Adicionar o scanner à CI com uma etapa inicialmente informativa, sem falsos bloqueios.
+- [x] Adicionar o scanner à CI com relatório informativo e falha explícita se o programa de auditoria não executar corretamente.
 - [ ] Criar suíte de testes de regressão para os eventos que forem alterados.
+- [x] Usar a mesma lista de patches ativa no workflow de build e no workflow de auditoria.
 
 ## Conclusão provisória
 
