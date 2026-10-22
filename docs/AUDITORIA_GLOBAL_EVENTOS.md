@@ -40,3 +40,25 @@ O scanner acompanha chamadas de script e vários tipos de gatilho, referências 
 - [ ] Revisar manualmente candidatos do relatório e todos os caminhos de flags/vars dos eventos modificados.
 - [ ] Fazer testes dinâmicos dos fluxos de inicialização/mapa e ferry.
 - [ ] Reintroduzir a animação gradualmente e obter confirmação manual do usuário.
+
+## Triagem manual dos candidatos do scanner (22/10/2026)
+
+Relatório gerado pelo artefato `event-script-audit-report` da execução [#39763952106](https://github.com/Jin27012007/Pokemon-coodinator-rpg/actions/runs/39763952106), usando a revisão upstream fixa `f4dc700a130330fd2f9325a17bbb1e2d91dbf091`.
+
+- **Mt. Chimney duplicate label:** candidato de definição duplicada no mesmo arquivo, em ramos condicionais de montagem; não é confirmado como colisão de runtime.
+- **Battle Dome / delay em setup de objetos:** o scanner aponta `delay 1` alcançável via `MAP_SCRIPT_ON_WARP_INTO_MAP_TABLE`. Deve ser revisto porque esse tipo de tabela é executado imediatamente pelo motor. O contexto indica que o atraso está no ramo de setup do oponente final; não foi alterado nesta auditoria.
+- **Battle Pyramid floor/top:** os scripts de resume incluem fluxo de recuperação de desafio e `warpsilent`/`waitstate`. São fluxos específicos da Battle Frontier e exigem testes em contexto de desafio salvo; não são alterações desta branch.
+- **Contest Hall:** `OnTransition` chama a preparação de música, que pode chamar `LinkContestWaitForConnection` quando o estado wireless pede conexão. É um fluxo de link, não um padrão para copiar em cenas locais. A condição de entrada precisa ser respeitada.
+- **Petalburg Gym:** o callback de load restaura portas e chama um special de animação com espera. É um caso existente que depende da semântica específica desse special; não deve ser generalizado para scripts novos.
+- **Route 117:** `getdaycaregfx` expande para native/special com efeitos e foi classificado como risco assíncrono. A rotina é uma inicialização específica de gráficos dos Pokémon da creche; não há indicação de que seja um conflito com o patch do barco.
+
+Os candidatos acima são alertas para revisão, não defeitos confirmados. A auditoria não modificou nenhum desses eventos upstream. Qualquer correção neles deve ser um projeto separado, com teste de regressão próprio.
+
+## Experimento do barco em duas fases
+
+- Patch ativo `0005-safe-boat-arrival-frame-script.patch`: apenas sinaliza a primeira chegada durante a transição e agenda a aparição do barco em `MAP_SCRIPT_ON_FRAME_TABLE`. O callback de transição não contém movimento nem espera.
+- Patch preparado, **não ativo**, `0006-boat-arrival-movement-stage.patch`: acrescenta `applymovement` e `waitmovement` dentro do script de frame, após a aparição. Só deve ser adicionado a `patches/ACTIVE_PATCHES.txt` depois que a build da fase 1 compilar e a ROM for testada manualmente.
+- O estado `VAR_LILYCOVE_CITY_STATE` está documentado como variável não utilizada na revisão upstream fixada; o script o zera antes de alterar o objeto para evitar que a tabela de frame dispare repetidamente.
+- O teste manual da fase 1 deve confirmar: sem congelamento na chegada; barco visível; possibilidade de andar e interagir; sair/voltar ao porto; salvar e recarregar; ferry regular ainda funcional.
+
+A fase 1 é uma validação intermediária, não a animação final. Não substituir a ROM de referência sem teste manual.
