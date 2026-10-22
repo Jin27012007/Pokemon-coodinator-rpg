@@ -32,6 +32,8 @@ A revisão de `include/constants/map_scripts.h` documenta categorias diferentes:
 - `ON_FRAME_TABLE`: a cada quadro depois do fade-in e antes de processar entrada; executa o primeiro script cuja condição é satisfeita;
 - `ON_RETURN_TO_FIELD`: caminho específico ao retorno ao campo.
 
+No motor `src/script.c`, os scripts de `ON_LOAD`, `ON_TRANSITION`, `ON_RESUME`, `ON_RETURN_TO_FIELD` e `ON_DIVE_WARP` passam por `RunScriptImmediately`, que executa o bytecode num contexto imediato até ele parar/terminar. Já as tabelas `ON_FRAME_TABLE` e `ON_WARP_INTO_MAP_TABLE` são consultadas por `MapHeaderCheckScriptTable`; a tabela de frame ativa o contexto global e a tabela de warp executa o script retornado no contexto imediato. Isso explica por que uma sequência com movimento e espera pode se comportar diferente conforme o tipo de gatilho e o momento do carregamento.
+
 Esses momentos **não são intercambiáveis**. A animação de Lilycove foi colocada em `ON_TRANSITION`, que ocorre durante a transição, e passou a fazer alterações ao barco, iniciar movimento e aguardar. Como o usuário confirmou que a ROM funciona depois da remoção desse bloco, devemos manter essa separação de responsabilidades em qualquer reconstrução.
 
 ## Motor de scripts: riscos relevantes
