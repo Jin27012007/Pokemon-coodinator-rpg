@@ -228,7 +228,6 @@ def main() -> int:
 
     unresolved = []
     movement_ref_findings = []
-    movement_terminator_findings = []
     special_ref_findings = []
     for p, txt in list(clean_texts.items()) + list(clean_shared.items()) + [(COMMON, common)]:
         rel = str(p.relative_to(ROOT))
