@@ -28,13 +28,11 @@ jobs:
           test "$(git -C source rev-parse HEAD)" = "f4dc700a130330fd2f9325a17bbb1e2d91dbf091"
 
       - name: Copy audit tool into source tree
-        run: |
-          mkdir -p source/tools/project-audit
-          cp tools/audit_event_script_refs.py source/tools/project-audit/audit_event_script_refs.py
+        run: cp tools/audit_event_script_refs.py source/tools/audit_event_script_refs.py
 
       - name: Run heuristic audit
         working-directory: source
-        run: python3 tools/project-audit/audit_event_script_refs.py | tee event-script-audit.txt
+        run: python3 tools/audit_event_script_refs.py | tee event-script-audit.txt
 
       - name: Upload audit report
         if: always()
