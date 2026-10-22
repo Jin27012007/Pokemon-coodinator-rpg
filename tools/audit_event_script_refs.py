@@ -138,6 +138,18 @@ def flow_targets(body: str, all_labels: set[str]) -> set[str]:
             targets.add(target)
     return targets
 
+def collect_script_fields(value, prefix: str = ""):
+    """Yield paths and string values for script fields at any map-event depth."""
+    if isinstance(value, dict):
+        for key, child in value.items():
+            child_path = f"{prefix}.{key}" if prefix else key
+            if key == "script" and isinstance(child, str):
+                yield child_path, child
+            yield from collect_script_fields(child, child_path)
+    elif isinstance(value, list):
+        for i, child in enumerate(value):
+            yield from collect_script_fields(child, f"{prefix}[{i}]")
+
 def main() -> int:
     if not MAPS.is_dir():
         print(f"ERROR: map directory missing: {MAPS}")
