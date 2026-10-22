@@ -1,0 +1,46 @@
+name: Audit event script references
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - experimental/pokeemerald-reference
+    paths:
+      - "tools/audit_event_script_refs.py"
+      - "docs/AUDITORIA_GLOBAL_EVENTOS.md"
+      - ".github/workflows/audit-event-scripts.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout audit tooling
+        uses: actions/checkout@v4
+
+      - name: Fetch pinned pokeemerald-expansion source
+        run: |
+          git clone --no-checkout https://github.com/rh-hideout/pokeemerald-expansion.git source
+          git -C source fetch --depth 1 origin f4dc700a130330fd2f9325a17bbb1e2d91dbf091
+          git -C source checkout --detach FETCH_HEAD
+          test "$(git -C source rev-parse HEAD)" = "f4dc700a130330fd2f9325a17bbb1e2d91dbf091"
+
+      - name: Copy audit tool into source tree
+        run: |
+          mkdir -p source/tools/project-audit
+          cp tools/audit_event_script_refs.py source/tools/project-audit/audit_event_script_refs.py
+
+      - name: Run heuristic audit
+        working-directory: source
+        run: python3 tools/project-audit/audit_event_script_refs.py | tee event-script-audit.txt
+
+      - name: Upload audit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: event-script-audit-report
+          path: source/event-script-audit.txt
+          if-no-files-found: warn
+          retention-days: 14
