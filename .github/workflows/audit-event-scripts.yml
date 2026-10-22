@@ -20,6 +20,11 @@ jobs:
       - name: Checkout audit tooling
         uses: actions/checkout@v4
 
+      - name: Install GBA build toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential git gcc-arm-none-eabi binutils-arm-none-eabi libnewlib-arm-none-eabi libstdc++-arm-none-eabi-newlib python3 perl libpng-dev
+
       - name: Fetch pinned pokeemerald-expansion source
         run: |
           git clone --no-checkout https://github.com/rh-hideout/pokeemerald-expansion.git source
@@ -33,6 +38,31 @@ jobs:
       - name: Run heuristic audit
         working-directory: source
         run: python3 tools/audit_event_script_refs.py | tee event-script-audit.txt
+
+      - name: Apply narrow GCC compatibility shim
+        working-directory: source
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          p = Path("src/battle_gfx_sfx_util.c")
+          s = p.read_text()
+          s, n1 = re.subn(
+              r"(case 6 \.\.\. 9:\n)([ ]+)(enum BattlerPosition position = GetBattlerPosition\(\(enum BattlerId\)\(state - 6\)\);)",
+              r"\1\2;\n\2\3", s, count=1
+          )
+          s, n2 = re.subn(
+              r"(case 4:\n[ ]+case 5:\n)([ ]+)(enum BattlerPosition position = GetBattlerPosition\(\(enum BattlerId\)\(state - 4\)\);)",
+              r"\1\2;\n\2\3", s, count=1
+          )
+          if n1 != 1 or n2 != 1:
+              raise SystemExit(f"Expected compatibility edits once each, got {n1} and {n2}")
+          p.write_text(s)
+          PY
+
+      - name: Compile full pinned ROM (validates assembled scripts and symbols)
+        working-directory: source
+        run: make -j2 CFLAGS="-std=gnu17"
 
       - name: Upload audit report
         if: always()
