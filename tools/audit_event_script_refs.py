@@ -15,6 +15,7 @@ MAPS = ROOT / "data/maps"
 COMMON = ROOT / "data/event_scripts.s"
 SPECIALS = ROOT / "data/specials.inc"
 GLOBAL_MOVEMENTS = ROOT / "data/scripts/movement.inc"
+EVENT_MACROS = ROOT / "asm/macros/event.inc"
 COMMON_DIR = ROOT / "data/scripts"
 FLAGS = ROOT / "include/constants/flags.h"
 FLAGS_FRLG = ROOT / "include/constants/flags_frlg.h"
@@ -109,6 +110,72 @@ def strip_comments(text: str) -> str:
             i += 1
         out.append(line[:cut])
     return "\n".join(out)
+
+def macro_risk_catalog(path: Path, special_waits: set[str]) -> dict[str, set[str]]:
+    """Conservatively identify event macros that expand into blocking/context commands."""
+    text = strip_comments(read(path))
+    macros: dict[str, list[str]] = {}
+    current: str | None = None
+    body: list[str] = []
+    for line in text.splitlines():
+        start = re.match(r"^\s*\.macro\s+([A-Za-z_][A-Za-z0-9_]*)", line)
+        if start:
+            if current is not None:
+                macros[current] = body
+            current = start.group(1).lower()
+            body = []
+            continue
+        if re.match(r"^\s*\.endm\b", line):
+            if current is not None:
+                macros[current] = body
+            current = None
+            body = []
+            continue
+        if current is not None:
+            body.append(line)
+    if current is not None:
+        macros[current] = body
+
+    risk: dict[str, set[str]] = {name: set() for name in macros}
+    dependencies: dict[str, set[str]] = {name: set() for name in macros}
+    for name, body_lines in macros.items():
+        for line in body_lines:
+            match = re.match(r"^\s*([A-Za-z_][A-Za-z0-9_]*)\b(.*)$", line)
+            if not match:
+                continue
+            command = match.group(1).lower()
+            args = match.group(2).strip()
+            if command in FRAME_WAIT_COMMANDS:
+                risk[name].add("frame-wait")
+            if command in CONTEXT_SENSITIVE_COMMANDS:
+                # The base special/specialvar macro encodes a conditional waitstate;
+                # actual special names are checked against data/specials.inc separately.
+                if not (name in {"special", "specialvar"} and command == "waitstate"):
+                    risk[name].add("context")
+            if command in ASYNC_RISK_COMMANDS:
+                risk[name].add("async")
+            if command in {"special", "specialvar"}:
+                special_name = args.split()[0].strip(",") if args else ""
+                if special_name in special_waits:
+                    risk[name].add("context")
+                elif not special_name or "\\" in special_name:
+                    risk[name].add("special")
+            if command in macros and command != name:
+                dependencies[name].add(command)
+
+    # Propagate risks through nested macro expansions until the graph stabilizes.
+    changed = True
+    while changed:
+        changed = False
+        for name, deps in dependencies.items():
+            combined = set(risk[name])
+            for dep in deps:
+                combined.update(risk[dep])
+            if combined != risk[name]:
+                risk[name] = combined
+                changed = True
+    return risk
+
 
 def split_labels(path: Path, text: str) -> list[tuple[str, str, int]]:
     matches = list(LABEL.finditer(text))
