@@ -193,7 +193,9 @@ def main() -> int:
     common_duplicates = sorted(k for k,v in common_counts.items() if v > 1)
 
     unresolved = []
-    for p, txt in list(clean_texts.items()) + list(clean_shared.items()):
+    movement_ref_findings = []
+    special_ref_findings = []
+    for p, txt in list(clean_texts.items()) + list(clean_shared.items()) + [(COMMON, common)]:
         rel = str(p.relative_to(ROOT))
         for m in FLOW.finditer(txt):
             op, args = m.group(1), m.group(2).strip()
@@ -202,14 +204,26 @@ def main() -> int:
             target = flow_target(op, args)
             if target and re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", target) and target not in all_labels and target not in IGNORED:
                 unresolved.append((rel, txt[:m.start()].count("\n")+1, op, target))
+        for m in MOVEMENT_REF.finditer(txt):
+            target = m.group(1)
+            if target not in all_labels:
+                movement_ref_findings.append((rel, txt[:m.start()].count("\n")+1, target))
+        for m in SPECIAL_REF.finditer(txt):
+            op, args = m.group(1), m.group(2).strip()
+            target = args.split(",")[-1].strip().split()[0] if op == "specialvar" else (args.split()[0].strip(",") if args else "")
+            if target and target not in special_defs:
+                special_ref_findings.append((rel, txt[:m.start()].count("\n")+1, op, target))
 
     # Specials with waitstate=1 cause the special macro to emit a waitstate
     # automatically. These also need review if reachable from a synchronous hook.
     special_waits = set()
+    special_defs = set()
     for line in strip_comments(read(SPECIALS)).splitlines():
         match = re.match(r"^\s*def_special\s+([A-Za-z_][A-Za-z0-9_]*)(.*)$", line)
-        if match and re.search(r"\bwaitstate\s*=\s*1\b", match.group(2)):
-            special_waits.add(match.group(1))
+        if match:
+            special_defs.add(match.group(1))
+            if re.search(r"\bwaitstate\s*=\s*1\b", match.group(2)):
+                special_waits.add(match.group(1))
 
     # Look through reachable script calls from synchronous map hooks for waits
     # that need a live field-frame update. This is a conservative call-graph pass.
