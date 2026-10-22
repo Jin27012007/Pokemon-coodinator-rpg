@@ -63,6 +63,28 @@ class EventAuditHelperTests(unittest.TestCase):
             [("fixture.inc", 10, "Scene_Movement_Broken", "walk_left")],
         )
 
+    def test_macro_risk_respects_conditional_callnative_waitstate(self):
+        source = r"""
+.macro callnative func:req, requests_effects=0, waitstate=0
+.if \\waitstate
+waitstate implicit=1
+.endif
+.endm
+.macro getdaycaregfx
+callnative GetDaycareGraphics, requests_effects=1
+.endm
+.macro blockingnative
+callnative GetDaycareGraphics, requests_effects=1, waitstate=1
+.endm
+"""
+        with tempfile.TemporaryDirectory() as directory:
+            macro_file = Path(directory) / "event.inc"
+            macro_file.write_text(source)
+            risks = audit.macro_risk_catalog(macro_file, set())
+        self.assertNotIn("context", risks["callnative"])
+        self.assertNotIn("context", risks["getdaycaregfx"])
+        self.assertIn("context", risks["blockingnative"])
+
     def test_dynamic_warp_is_explicitly_classified(self):
         self.assertTrue(audit.is_dynamic_map_reference("MAP_DYNAMIC"))
         self.assertFalse(audit.is_dynamic_map_reference("MAP_LILYCOVE_CITY"))
