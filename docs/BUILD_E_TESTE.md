@@ -8,15 +8,29 @@ Esta branch usa `rh-hideout/pokeemerald-expansion`, não o código de Quetzal. O
 
 Acesse [Build female-default boat-arrival prototype](https://github.com/Jin27012007/Pokemon-coodinator-rpg/actions/workflows/build-boat-arrival.yml), abra a execução mais recente e baixe `female-default-boat-arrival-build`. O artefato expira após 7 dias.
 
-## Histórico do congelamento
+## Diagnóstico técnico do congelamento
 
-O teste manual identificou tela preta com silhueta branca ao confirmar o nome, antes do primeiro mapa. A primeira hipótese foi a sequência `ExecuteTruckSequence` continuar ativa após mudar o destino inicial para Lilycove. A substituição desse callback por `FieldCB_WarpExitFadeFromBlack` compilou, mas o usuário confirmou que o congelamento continuou no mesmo frame. Portanto, essa hipótese não explica sozinha o defeito e o problema ainda está aberto.
+O teste manual confirmou que o início em Lilycove funciona após remover a animação. A hipótese inicial de que `ExecuteTruckSequence` era a única causa foi descartada: substituir esse callback por `FieldCB_WarpExitFadeFromBlack` não resolveu o travamento.
 
-## Auditoria do evento do barco
+A leitura do código da revisão-base agora aponta para uma causa específica e consistente com o sintoma: **a animação chamava `waitmovement 0` dentro de `LilycoveCity_Harbor_OnTransition`, um script executado sincronicamente durante a transição do mapa.**
 
-O evento inicial foi colocado em `LilycoveCity_Harbor_OnTransition`. No código-base, esse callback já é chamado durante a transição do mapa e termina imediatamente depois de `setescapewarp`. O protótipo acrescentava nele a aparição do SS Tidal, a alteração da posição permanente, a liberação da flag de ocultação e uma sequência de movimento com `waitmovement 0`. Isso mistura a chegada cenográfica ao carregamento inicial do mapa. Como o congelamento acontece antes de o mapa ficar utilizável e começou quando essa animação foi introduzida, esse acoplamento é uma hipótese concreta a isolar. Ainda não há evidência suficiente para afirmar que `waitmovement` é definitivamente a causa.
+A cadeia no código é:
+1. `src/overworld.c` chama `RunOnTransitionMapScript()` durante a preparação do mapa.
+2. `src/script.c` encaminha isso para `MapHeaderRunScriptType()`, que usa `RunScriptImmediately()`.
+3. `RunScriptImmediately()` executa um laço apertado até o script acabar; ele não devolve o controle normal ao ciclo de quadros do jogo.
+4. Em `src/scrcmd.c`, `ScrCmd_waitmovement()` muda o contexto para um script nativo `WaitForMovementFinish`, que continua retornando “ainda não terminou” até o motor de movimento atualizar o objeto.
+5. Como esse wait ocorre dentro do laço síncrono de transição, o movimento não recebe os quadros normais necessários para terminar. O script fica preso antes de o mapa tornar-se jogável.
 
-A nova revisão remove a animação e todas as alterações ao evento do porto do patch. O início no porto e o callback genérico continuam como teste mínimo, para separar o carregamento do mapa da animação do barco. Só depois de o início passar sem congelar deve-se recolocar a chegada como evento acionado depois de o mapa estar estável, de preferência num evento controlado por uma flag de progresso e sem bloquear o callback de transição.
+Referências diretas da revisão fixada:
+- [Chamadas de transição e resume em overworld.c](https://github.com/rh-hideout/pokeemerald-expansion/blob/f4dc700a130330fd2f9325a17bbb1e2d91dbf091/src/overworld.c#L901-L913)
+- [Laço síncrono RunScriptImmediately em script.c](https://github.com/rh-hideout/pokeemerald-expansion/blob/f4dc700a130330fd2f9325a17bbb1e2d91dbf091/src/script.c#L359-L366)
+- [MapHeaderRunScriptType e gatilhos de mapa em script.c](https://github.com/rh-hideout/pokeemerald-expansion/blob/f4dc700a130330fd2f9325a17bbb1e2d91dbf091/src/script.c#L389-L394)
+- [ScrCmd_waitmovement em scrcmd.c](https://github.com/rh-hideout/pokeemerald-expansion/blob/f4dc700a130330fd2f9325a17bbb1e2d91dbf091/src/scrcmd.c#L1334-L1346)
+- [Script de chegada introduzido pelo patch histórico](https://github.com/Jin27012007/Pokemon-coodinator-rpg/commit/37d90bc06ef23b921db0e68b682ca349bd13be04)
+
+A remoção da animação e o teste bem-sucedido corroboram esse diagnóstico. O mecanismo de bloqueio é sustentado pelo código; ainda assim, uma recompilação experimental que coloque a cena em um contexto assíncrono, seguida de teste manual, será a validação final da correção.
+
+A próxima implementação não deve recolocar movimento com espera em `ON_TRANSITION`. A chegada deve ser disparada depois que o mapa estiver pronto — por exemplo, por um gatilho controlado após a entrada e condicionado por uma flag persistente — de forma que o motor de quadros continue processando os movimentos.
 
 ## Teste manual obrigatório
 
