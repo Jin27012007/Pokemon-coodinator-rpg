@@ -192,6 +192,22 @@ def main() -> int:
     common_counts = Counter(LABEL.findall(common))
     common_duplicates = sorted(k for k,v in common_counts.items() if v > 1)
 
+    # Movement scripts normally finish with step_end. Sentinels used to delimit
+    # the follower-safe movement range are labels, not executable movements.
+    for label, definitions in label_bodies.items():
+        if "Movement_" not in label or label.endswith("FollowerSafeStart"):
+            continue
+        for src_path, body, start_line in definitions:
+            instructions = [
+                line.strip() for line in body.splitlines()
+                if line.strip() and not line.strip().startswith(".")
+            ]
+            if not instructions:
+                continue
+            terminal = instructions[-1].split()[0].lower()
+            if terminal not in {"step_end", "end"}:
+                movement_terminator_findings.append((src_path, start_line, label, terminal))
+
     # Specials with waitstate=1 cause the special macro to emit a waitstate
     # automatically. These also need review if reachable from a synchronous hook.
     special_waits = set()
@@ -205,6 +221,7 @@ def main() -> int:
 
     unresolved = []
     movement_ref_findings = []
+    movement_terminator_findings = []
     special_ref_findings = []
     for p, txt in list(clean_texts.items()) + list(clean_shared.items()) + [(COMMON, common)]:
         rel = str(p.relative_to(ROOT))
@@ -354,6 +371,9 @@ def main() -> int:
     print(f"  same-file conditional duplicate candidates: {len(same_file_duplicates)}")
     print(f"duplicate labels in data/event_scripts.s: {len(common_duplicates)}")
     print(f"possible unresolved flow references: {len(unresolved)}")
+    print(f"movement references needing review: {len(movement_ref_findings)}")
+    print(f"movement terminator candidates: {len(movement_terminator_findings)}")
+    print(f"special references not defined in data/specials.inc: {len(special_ref_findings)}")
     print(f"flag symbols used / not found in selected headers: {len(flags_used)} / {len(unknown_flags)}")
     print(f"var symbols used / not found in selected headers: {len(vars_used)} / {len(unknown_vars)}")
     print(f"invalid JSON files: {len(json_errors)}")
@@ -376,6 +396,12 @@ def main() -> int:
         print("DUPLICATE_COMMON_AGGREGATOR_LABEL", name)
     for row in unresolved[:250]:
         print("UNRESOLVED_CANDIDATE", *row)
+    for row in movement_ref_findings[:250]:
+        print("MOVEMENT_REFERENCE_REVIEW", *row)
+    for row in movement_terminator_findings[:250]:
+        print("MOVEMENT_TERMINATOR_REVIEW", *row)
+    for row in special_ref_findings[:250]:
+        print("SPECIAL_REFERENCE_REVIEW", *row)
     for name in unknown_flags[:200]:
         print("FLAG_NOT_IN_SELECTED_HEADERS", name)
     for name in unknown_vars[:200]:
