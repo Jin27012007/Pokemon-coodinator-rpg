@@ -1,43 +1,63 @@
 # Auditoria de eventos — Pokemon Coordinator RPG
 
 Data da auditoria: 2026-10-22  
-Branch analisada: `experimental/pokeemerald-reference`  
-Commit analisado: `a9ccc47d56bce8f64f9ef8aae41b05e553bafe18`  
+Branch de trabalho: `experimental/pokeemerald-reference`  
 Base de compilação: `rh-hideout/pokeemerald-expansion` em `f4dc700a130330fd2f9325a17bbb1e2d91dbf091`
 
 ## Resultado do reconhecimento
 
-A árvore do repositório experimental contém workflows de build, documentação técnica e quatro patches numerados. O código-fonte completo da engine não está guardado nesta branch: o workflow baixa uma revisão fixa do repositório `rh-hideout/pokeemerald-expansion` durante a compilação e aplica os patches sobre ela. Portanto, alterações de eventos precisam ser avaliadas contra essa revisão exata.
+O repositório experimental mantém a lógica do projeto em patches e baixa uma revisão fixa do código-fonte de `pokeemerald-expansion` durante os workflows. Para mudanças de eventos, a referência obrigatória é essa revisão upstream exata, e não o binário de Pokémon Quetzal Alpha 9. Ainda não identificamos uma revisão oficial do código-fonte que corresponda exatamente a Quetzal Alpha 9.
 
 ## Constatações confirmadas
 
-- A versão de diagnóstico foi compilada no workflow [39688172012](https://github.com/Jin27012007/Pokemon-coodinator-rpg/actions/runs/39688172012); o usuário confirmou no teste manual que chegou a Lilycove e conseguiu jogar sem congelamento quando a animação do barco foi removida.
-- O patch 0004 altera `src/main_menu.c` (fluxo que salta a escolha de gênero e segue para o nome), `src/new_game.c` (retira uma atribuição de gênero feita no início do save) e `src/overworld.c` (troca `ExecuteTruckSequence` por `FieldCB_WarpExitFadeFromBlack`).
-- O histórico técnico informa que o evento de chegada havia sido integrado a `LilycoveCity_Harbor_OnTransition`, junto a visibilidade/posicionamento do barco e um movimento com espera. Isso acopla a cena cinematográfica à transição do mapa.
-- O patch 0003 redireciona o warp de `WarpToTruck()` para `MAP_LILYCOVE_CITY_HARBOR` nas coordenadas (11, 13) e define a protagonista feminina no save.
-- A revisão upstream é fixa no workflow atual, que ajuda a tornar as builds reprodutíveis.
+- O usuário testou a ROM de diagnóstico e confirmou que, removida a animação, o jogo entra em Lilycove e permanece jogável.
+- O patch 0003 redireciona o warp inicial de `WarpToTruck()` para `MAP_LILYCOVE_CITY_HARBOR` nas coordenadas (11, 13).
+- O patch 0004 altera o fluxo da apresentação feminina em `src/main_menu.c` e o callback inicial em `src/overworld.c`.
+- A animação do barco foi adicionada ao `LilycoveCity_Harbor_OnTransition` e executava mudança da flag de ocultação, posicionamento do barco, `addobject`, `applymovement` e `waitmovement 0`.
+- A revisão upstream fixa contém 887 arquivos `data/maps/*/scripts.inc`, 939 arquivos `data/maps/*/map.json`, 86 arquivos de scripts compartilhados em `data/scripts/`, além do motor em `src/script.c` / `src/scrcmd.c` e das macros em `asm/macros/event.inc`.
 
-## Hipótese prioritária sobre o congelamento
+## Causa identificada para o congelamento do barco
 
-A animação do barco/alterações ao callback de transição é a principal suspeita porque removê-la resultou numa ROM que o usuário testou com sucesso. Isso ainda não determina qual comando exato era responsável. A causa pode estar no momento em que o evento roda, no estado/visibilidade do objeto, numa espera de movimento, ou na interação com a inicialização do mapa.
+A hipótese foi refinada pela leitura direta do motor: o bloqueio é consistente com a combinação de `waitmovement 0` dentro do script `MAP_SCRIPT_ON_TRANSITION`.
 
-## Procedimento seguro para eventos
+1. `src/overworld.c` chama `RunOnTransitionMapScript()` enquanto prepara a entrada do mapa.
+2. `src/script.c` despacha esse tipo por `MapHeaderRunScriptType()`, que usa `RunScriptImmediately()`.
+3. `RunScriptImmediately()` executa o script em um laço síncrono até ele terminar, sem devolver o controle normal ao ciclo de quadros.
+4. `src/scrcmd.c::ScrCmd_waitmovement()` troca para o native `WaitForMovementFinish`, que continua aguardando o término do movimento do objeto.
+5. O movimento depende de atualizações do jogo por quadro; aguardar seu término dentro do laço síncrono de transição pode prender o processo antes de o mapa ficar jogável.
 
-1. Preservar a compilação sem animação como baseline de regressão; não sobrescrevê-la.
-2. Inspecionar o script original completo da revisão upstream fixa: `data/maps/LilycoveCity_Harbor/scripts.inc`, mais `events.inc` e `map.json`.
-3. Diferenciar os gatilhos e pontos de execução: `OnTransition`, `OnLoad`, `OnFrame`, scripts de gatilho e scripts de objeto/NPC. Não colocar uma cena com esperas bloqueantes num callback que deve apenas inicializar o mapa.
-4. Mapear cada comando da cena, referências a object events, flags/vars, condições de primeira execução e caminho de saída de todos os ramos.
-5. Reintroduzir uma única alteração por build, com flag persistente para garantir execução única e um fallback que nunca deixe o jogador bloqueado.
-6. Validar aplicação do patch, diff, compilação e então teste manual com save novo e save/load. Testar também a viagem normal do S.S. Tidal.
-7. Documentar o resultado observado separadamente da inferência técnica.
+O teste manual de sucesso após remover a animação corrobora fortemente esta explicação. A causa técnica está identificada, mas a correção final da cena ainda precisa ser provada por uma nova implementação em contexto assíncrono e por teste manual.
 
-## Limites desta auditoria
+Referências do upstream:
+- [Chamadas de transição e resume em `overworld.c`](https://github.com/rh-hideout/pokeemerald-expansion/blob/f4dc700a130330fd2f9325a17bbb1e2d91dbf091/src/overworld.c#L901-L913)
+- [Execução síncrona em `RunScriptImmediately`](https://github.com/rh-hideout/pokeemerald-expansion/blob/f4dc700a130330fd2f9325a17bbb1e2d91dbf091/src/script.c#L359-L366)
+- [Despacho de gatilhos em `script.c`](https://github.com/rh-hideout/pokeemerald-expansion/blob/f4dc700a130330fd2f9325a17bbb1e2d91dbf091/src/script.c#L389-L394)
+- [Implementação de `waitmovement` em `scrcmd.c`](https://github.com/rh-hideout/pokeemerald-expansion/blob/f4dc700a130330fd2f9325a17bbb1e2d91dbf091/src/scrcmd.c#L1334-L1346)
+- [Commit que introduziu a sequência de chegada](https://github.com/Jin27012007/Pokemon-coodinator-rpg/commit/37d90bc06ef23b921db0e68b682ca349bd13be04)
 
-Esta etapa reconheceu a arquitetura do repositório, os patches e os workflows. Ainda não foi feita uma análise linha por linha do script original da engine porque os arquivos da base upstream são baixados dentro do job e não constam na árvore do projeto; o próximo passo é buscar o arquivo da revisão fixa diretamente e construir o mapa de fluxo. Também não foi identificada uma revisão de código-fonte oficial que corresponda exatamente ao Pokémon Quetzal Alpha 9, então não se deve afirmar compatibilidade com essa ROM.
+## Regras de segurança extraídas desta investigação
 
-## Referências do repositório
+1. Preservar a ROM sem animação como baseline; não substituí-la durante os experimentos.
+2. Separar callbacks de configuração de mapa de cenas com movimentos, mensagens e esperas.
+3. Distinguir os contextos dos gatilhos: `ON_TRANSITION`, `ON_LOAD`, `ON_RESUME`, `ON_RETURN_TO_FIELD`, `ON_DIVE_WARP` e `ON_WARP_INTO_MAP_TABLE` executam scripts por caminho imediato; `ON_FRAME_TABLE` usa o contexto global e seleciona o primeiro script cuja condição passa.
+4. Antes de remover ou renomear um evento, procurar referências nas labels, scripts compartilhados, objetos do `map.json`, flags/vars e código nativo.
+5. Para cada alteração: validar aplicação do patch, revisar o diff, executar análise estática, compilar a revisão fixada e testar manualmente novo jogo, movimentação, save/load e fluxo normal do ferry.
+6. Não tratar a compilação bem-sucedida como prova de ausência de congelamento; a execução dentro do jogo segue necessária.
+
+## Estado da auditoria
+
+- [x] Inventário estrutural da árvore de eventos.
+- [x] Fluxo do motor de scripts e diferentes tipos de gatilhos mapeados.
+- [x] Causa provável do congelamento de chegada ligada ao `waitmovement` síncrono, corroborada pelo teste manual.
+- [x] Scanner inicial para referências cruzadas adicionado ao branch.
+- [ ] Calibrar o scanner contra todos os casos condicionais e confirmar falsos positivos.
+- [ ] Concluir a análise de referências de comandos de espera em callbacks síncronos.
+- [ ] Compilar a base completa via workflow de auditoria.
+- [ ] Projetar e testar a nova chegada após o mapa estar estável, com execução única e sem travar o ciclo de quadros.
+
+## Referências do projeto
 
 - [Branch experimental](https://github.com/Jin27012007/Pokemon-coodinator-rpg/tree/experimental/pokeemerald-reference)
 - [Patch 0004](https://github.com/Jin27012007/Pokemon-coodinator-rpg/blob/experimental/pokeemerald-reference/patches/0004-female-default-and-boat-arrival.patch)
-- [Workflow de compilação](https://github.com/Jin27012007/Pokemon-coodinator-rpg/blob/experimental/pokeemerald-reference/.github/workflows/build-boat-arrival.yml)
-- [Documentação de build e teste](https://github.com/Jin27012007/Pokemon-coodinator-rpg/blob/experimental/pokeemerald-reference/docs/BUILD_E_TESTE.md)
+- [Workflow de compilação de diagnóstico](https://github.com/Jin27012007/Pokemon-coodinator-rpg/blob/experimental/pokeemerald-reference/.github/workflows/build-boat-arrival.yml)
+- [Guia de build e teste](https://github.com/Jin27012007/Pokemon-coodinator-rpg/blob/experimental/pokeemerald-reference/docs/BUILD_E_TESTE.md)
