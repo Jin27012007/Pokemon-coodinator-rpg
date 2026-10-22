@@ -8,7 +8,7 @@ on:
     paths:
       - "patches/ACTIVE_PATCHES.txt"
       - "patches/0003-lilycove-female-prototype.patch"
-      - "patches/0004-female-default-and-boat-arrival.patch"
+      - "patches/**"
       - ".github/workflows/build-boat-arrival.yml"
 
 permissions:
