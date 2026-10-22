@@ -1,0 +1,75 @@
+name: Build boat animation experiment
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - experimental/pokeemerald-reference
+    paths:
+      - "patches/0005-boat-arrival-frame-experiment.patch"
+      - ".github/workflows/build-boat-experiment.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout experiment
+        uses: actions/checkout@v4
+      - name: Install toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential git gcc-arm-none-eabi binutils-arm-none-eabi libnewlib-arm-none-eabi libstdc++-arm-none-eabi-newlib python3 perl libpng-dev
+      - name: Fetch exact source revision
+        run: |
+          mkdir source
+          git -C source init
+          git -C source remote add origin https://github.com/rh-hideout/pokeemerald-expansion.git
+          git -C source fetch --depth 1 origin f4dc700a130330fd2f9325a17bbb1e2d91dbf091
+          git -C source checkout --detach FETCH_HEAD
+          test "$(git -C source rev-parse HEAD)" = "f4dc700a130330fd2f9325a17bbb1e2d91dbf091"
+      - name: Apply baseline patches
+        run: |
+          git -C source apply --check "$GITHUB_WORKSPACE/patches/0003-lilycove-female-prototype.patch"
+          git -C source apply "$GITHUB_WORKSPACE/patches/0003-lilycove-female-prototype.patch"
+          git -C source apply --check "$GITHUB_WORKSPACE/patches/0004-female-default-and-boat-arrival.patch"
+          git -C source apply "$GITHUB_WORKSPACE/patches/0004-female-default-and-boat-arrival.patch"
+      - name: Apply isolated boat experiment
+        run: |
+          git -C source apply --check "$GITHUB_WORKSPACE/patches/0005-boat-arrival-frame-experiment.patch"
+          git -C source apply "$GITHUB_WORKSPACE/patches/0005-boat-arrival-frame-experiment.patch"
+      - name: Apply narrow GCC compatibility shim
+        working-directory: source
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          p = Path("src/battle_gfx_sfx_util.c")
+          s = p.read_text()
+          s, n1 = re.subn(
+              r"(case 6 \.\.\. 9:\n)([ ]+)(enum BattlerPosition position = GetBattlerPosition\(\(enum BattlerId\)\(state - 6\)\);)",
+              r"\1\2;\n\2\3", s, count=1
+          )
+          s, n2 = re.subn(
+              r"(case 4:\n[ ]+case 5:\n)([ ]+)(enum BattlerPosition position = GetBattlerPosition\(\(enum BattlerId\)\(state - 4\)\);)",
+              r"\1\2;\n\2\3", s, count=1
+          )
+          if n1 != 1 or n2 != 1:
+              raise SystemExit(f"Expected compatibility edits once each, got {n1} and {n2}")
+          p.write_text(s)
+          PY
+      - name: Compile experimental ROM
+        working-directory: source
+        run: make -j2 CFLAGS="-std=gnu17"
+      - name: Upload experimental ROM
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: boat-arrival-frame-experiment
+          path: |
+            source/*.gba
+            source/*.elf
+          if-no-files-found: warn
+          retention-days: 7
