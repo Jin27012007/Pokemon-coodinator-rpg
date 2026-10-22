@@ -38,6 +38,8 @@ Esses momentos **não são intercambiáveis**. A animação de Lilycove foi colo
 
 Em `src/script.c`, o motor separa execução de bytecode, scripts nativos e estados parado/em execução/aguardando. `StopScript` tem uma asserção para evitar sair de um script enquanto há um warp em andamento sem `waitstate`; chamadas, retornos e saltos dependem de ponteiros/stack válidos. Os comandos são despachados pelo índice de `gScriptCmdTable`.
 
+Na revisão fixada, `asm/macros/event.inc` define 401 macros. Entre as operações relevantes para segurança de eventos estão `call`, `goto`, os ramos condicionais, `setvar`/`copyvar`, `special`, `waitstate`, `warp`, `applymovement`, `waitmovement`, `lock`/`release`, `hideplayer`/`showplayer`, `hideobjectat`/`showobjectat`, `addobject`/`removeobject` e comandos de porta/fade. A lista completa deve ser catalogada por semântica, não só por nome: alguns `special` já geram `waitstate` implicitamente, conforme a tabela de especiais, e adicionar um `waitstate` explícito logo depois pode ser redundante ou ignorado.
+
 Macros em `asm/macros/event.inc` definem operações como `call`, `goto`, `goto_if`, `setvar`, `copyvar`, `special` e `waitstate`. A macro de `setvar` inclusive emite alerta quando o segundo argumento parece ser um identificador de variável; o caso comum correto é `copyvar`. Isso mostra que comandos parecidos têm semânticas diferentes e precisam ser conferidos, não apenas copiados.
 
 ## O que precisa ser verificado em cada script antes de editar
