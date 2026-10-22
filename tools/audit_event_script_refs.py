@@ -42,22 +42,28 @@ SYNCHRONOUS_HOOKS = {
     "MAP_SCRIPT_ON_RETURN_TO_FIELD", "MAP_SCRIPT_ON_DIVE_WARP",
     "MAP_SCRIPT_ON_WARP_INTO_MAP_TABLE",
 }
-BLOCKING_COMMANDS = {
-    # Commands that wait for a future frame, animation, sound, movement or input.
+# Commands that wait on a frame-driven animation/state. Inside RunScriptImmediately
+# these are the high-confidence deadlock candidates (the boat bug used waitmovement).
+FRAME_WAIT_COMMANDS = {
     "delay", "animateflash", "fadescreen", "fadescreenspeed", "fadescreenswapbuffers",
-    "waitmovement", "waitmovementat", "waitmovementall", "waitstate", "waitse",
-    "waitfanfare", "fadeoutbgm", "waitmessage", "waitbuttonpress", "waitdooranim",
-    "waitfieldeffect", "waitmoncry", "yesnobox", "dynmultichoice", "multichoice",
-    "multichoicedefault", "multichoicegrid", "drawboxtext", "hidemonpic",
-    "showcontestpainting", "dotrainerbattle", "dowildbattle", "pokemart",
-    "pokemartdecoration", "pokemartdecoration2", "playslotmachine", "choosecontestmon",
-    "startcontest", "showcontestresults", "contestlinktransfer", "hidefollower",
-    "lock", "lockall", "lockfortrainer",
+    "waitmovement", "waitmovementat", "waitmovementall", "waitse", "waitfanfare",
+    "fadeoutbgm", "waitmessage", "waitdooranim", "waitfieldeffect", "waitmoncry",
+    "hidemonpic", "hidefollower", "lock", "lockall", "lockfortrainer",
 }
-# Calls whose implementation may start an async UI/native flow or transition.
-ASYNC_RISK_COMMANDS = {"callnative", "gotonative", "special", "specialvar", "warp",
-    "warpsilent", "warpdoor", "warphole", "warpteleport", "warpmossdeepgym",
-    "warpspinenter", "warpwhitefade"}
+# These stop or redirect the global script context or launch another game flow.
+# In an immediate map callback they need semantic review, but are not the same as
+# a native wait that spins until frame-driven work finishes.
+CONTEXT_SENSITIVE_COMMANDS = {
+    "waitstate", "waitbuttonpress", "yesnobox", "dynmultichoice", "multichoice",
+    "multichoicedefault", "multichoicegrid", "drawboxtext", "showcontestpainting",
+    "dotrainerbattle", "dowildbattle", "pokemart", "pokemartdecoration",
+    "pokemartdecoration2", "playslotmachine", "choosecontestmon", "startcontest",
+    "showcontestresults", "contestlinktransfer",
+}
+ASYNC_RISK_COMMANDS = {
+    "callnative", "gotonative", "warp", "warpsilent", "warpdoor", "warphole",
+    "warpteleport", "warpmossdeepgym", "warpspinenter", "warpwhitefade",
+}
 COMMAND_RE = re.compile(r"^\s*([A-Za-z_][A-Za-z0-9_]*)\b([^\n@]*)", re.M)
 
 def read(path: Path) -> str:
@@ -249,6 +255,7 @@ def main() -> int:
     # Look through reachable script calls from synchronous map hooks for waits
     # that need a live field-frame update. This is a conservative call-graph pass.
     blocking_hook_findings = []
+    context_hook_findings = []
     async_hook_findings = []
     hook_count = 0
     table_hook_reviews = 0
@@ -279,14 +286,14 @@ def main() -> int:
                         command_name = command.group(1).lower()
                         args = command.group(2).strip()
                         line_no = start_line + body[:command.start()].count("\n")
-                        if command_name in BLOCKING_COMMANDS:
+                        if command_name in FRAME_WAIT_COMMANDS:
                             blocking_hook_findings.append((map_path, tag, root, src_path, line_no, command_name, " -> ".join(chain)))
                         elif command_name == "special":
                             special_name = args.split()[0] if args else ""
                             if special_name in special_waits:
-                                blocking_hook_findings.append((map_path, tag, root, src_path, line_no, "special(waitstate=1):" + special_name, " -> ".join(chain)))
-                            else:
-                                async_hook_findings.append((map_path, tag, root, src_path, line_no, command_name + ":" + special_name, " -> ".join(chain)))
+                                context_hook_findings.append((map_path, tag, root, src_path, line_no, "special(waitstate=1):" + special_name, " -> ".join(chain)))
+                        elif command_name in CONTEXT_SENSITIVE_COMMANDS:
+                            context_hook_findings.append((map_path, tag, root, src_path, line_no, command_name, " -> ".join(chain)))
                         elif command_name in ASYNC_RISK_COMMANDS:
                             async_hook_findings.append((map_path, tag, root, src_path, line_no, command_name, " -> ".join(chain)))
                     for next_label in flow_targets(body, all_labels):
@@ -396,8 +403,9 @@ def main() -> int:
     print(f"duplicate map IDs: {len(dup_ids)}")
     print(f"synchronous map hook roots inspected: {hook_count}")
     print(f"ON_WARP_INTO_MAP_TABLE roots manually discovered: {table_hook_reviews}")
-    print(f"blocking-command candidates reachable from synchronous hooks: {len(blocking_hook_findings)}")
-    print(f"async/native/warp-risk candidates reachable from synchronous hooks: {len(async_hook_findings)}")
+    print(f"frame-wait deadlock candidates reachable from synchronous hooks: {len(blocking_hook_findings)}")
+    print(f"global-context control candidates reachable from synchronous hooks: {len(context_hook_findings)}")
+    print(f"native/warp-risk candidates reachable from synchronous hooks: {len(async_hook_findings)}")
     print(f"specials with implicit waitstate defined: {len(special_waits)}")
 
     for name, locations in sorted(cross_file_duplicates.items()):
@@ -431,7 +439,9 @@ def main() -> int:
     for row in destination_warp_findings[:250]:
         print("DESTINATION_WARP_INDEX_REVIEW", *row)
     for row in blocking_hook_findings[:250]:
-        print("BLOCKING_SYNC_HOOK_CANDIDATE", *row)
+        print("FRAME_WAIT_SYNC_HOOK_CANDIDATE", *row)
+    for row in context_hook_findings[:250]:
+        print("GLOBAL_CONTEXT_SYNC_HOOK_REVIEW", *row)
     for row in async_hook_findings[:250]:
         print("ASYNC_SYNC_HOOK_REVIEW", *row)
     for name in dup_ids:
