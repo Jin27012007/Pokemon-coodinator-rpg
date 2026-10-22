@@ -192,6 +192,17 @@ def main() -> int:
     common_counts = Counter(LABEL.findall(common))
     common_duplicates = sorted(k for k,v in common_counts.items() if v > 1)
 
+    # Specials with waitstate=1 cause the special macro to emit a waitstate
+    # automatically. These also need review if reachable from a synchronous hook.
+    special_waits = set()
+    special_defs = set()
+    for line in strip_comments(read(SPECIALS)).splitlines():
+        match = re.match(r"^\s*def_special\s+([A-Za-z_][A-Za-z0-9_]*)(.*)$", line)
+        if match:
+            special_defs.add(match.group(1))
+            if re.search(r"\bwaitstate\s*=\s*1\b", match.group(2)):
+                special_waits.add(match.group(1))
+
     unresolved = []
     movement_ref_findings = []
     special_ref_findings = []
@@ -214,16 +225,7 @@ def main() -> int:
             if target and target not in special_defs:
                 special_ref_findings.append((rel, txt[:m.start()].count("\n")+1, op, target))
 
-    # Specials with waitstate=1 cause the special macro to emit a waitstate
-    # automatically. These also need review if reachable from a synchronous hook.
-    special_waits = set()
-    special_defs = set()
-    for line in strip_comments(read(SPECIALS)).splitlines():
-        match = re.match(r"^\s*def_special\s+([A-Za-z_][A-Za-z0-9_]*)(.*)$", line)
-        if match:
-            special_defs.add(match.group(1))
-            if re.search(r"\bwaitstate\s*=\s*1\b", match.group(2)):
-                special_waits.add(match.group(1))
+
 
     # Look through reachable script calls from synchronous map hooks for waits
     # that need a live field-frame update. This is a conservative call-graph pass.
