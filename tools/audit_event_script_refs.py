@@ -227,11 +227,13 @@ def main() -> int:
         rel = str(p.relative_to(ROOT))
         for m in FLOW.finditer(txt):
             op, args = m.group(1), m.group(2).strip()
-            if op == "map_script":
-                continue
             target = flow_target(op, args)
             if target and re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", target) and target not in all_labels and target not in IGNORED:
                 unresolved.append((rel, txt[:m.start()].count("\n")+1, op, target))
+        for m in CASE_REF.finditer(txt):
+            target = m.group(1)
+            if target not in all_labels and target not in IGNORED:
+                unresolved.append((rel, txt[:m.start()].count("\n")+1, "case", target))
         for m in MOVEMENT_REF.finditer(txt):
             target = m.group(1)
             if target not in all_labels:
