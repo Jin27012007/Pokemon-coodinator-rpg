@@ -12,27 +12,24 @@ on:
       - ".github/workflows/audit-event-scripts.yml"
       - "patches/**"
 
-concurrency:
-  group: event-script-audit-${{ github.ref }}
-  cancel-in-progress: true
-
 permissions:
   contents: read
 
 jobs:
   audit:
+    name: Static event audit
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout audit tooling
         uses: actions/checkout@v4
 
-      - name: Test audit helper logic
-        run: python3 -m unittest discover -s tests -p "test_audit_event_script_refs.py"
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
 
-      - name: Install GBA build toolchain
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential git gcc-arm-none-eabi binutils-arm-none-eabi libnewlib-arm-none-eabi libstdc++-arm-none-eabi-newlib python3 perl libpng-dev
+      - name: Test audit helper logic
+        run: python -m unittest discover -s tests -p "test_audit_event_script_refs.py"
 
       - name: Fetch pinned pokeemerald-expansion source
         run: |
@@ -58,6 +55,45 @@ jobs:
         working-directory: source
         run: set -o pipefail; python3 tools/audit_event_script_refs.py | tee event-script-audit.txt
 
+      - name: Upload static audit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: event-script-audit-report
+          path: source/event-script-audit.txt
+          if-no-files-found: warn
+          retention-days: 14
+
+  compile:
+    name: Compile patched source after audit
+    needs: audit
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout project and patches
+        uses: actions/checkout@v4
+
+      - name: Install GBA build toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential git gcc-arm-none-eabi binutils-arm-none-eabi libnewlib-arm-none-eabi libstdc++-arm-none-eabi-newlib python3 perl libpng-dev
+
+      - name: Fetch pinned pokeemerald-expansion source
+        run: |
+          git clone --no-checkout https://github.com/rh-hideout/pokeemerald-expansion.git source
+          git -C source fetch --depth 1 origin f4dc700a130330fd2f9325a17bbb1e2d91dbf091
+          git -C source checkout --detach FETCH_HEAD
+          test "$(git -C source rev-parse HEAD)" = "f4dc700a130330fd2f9325a17bbb1e2d91dbf091"
+
+      - name: Apply active experimental patch stack
+        run: |
+          while IFS= read -r patch || [[ -n "$patch" ]]; do
+            case "$patch" in ""|\#*) continue ;; esac
+            test -f "$GITHUB_WORKSPACE/$patch"
+            echo "Applying $patch"
+            git -C source apply --check "$GITHUB_WORKSPACE/$patch"
+            git -C source apply "$GITHUB_WORKSPACE/$patch"
+          done < "$GITHUB_WORKSPACE/patches/ACTIVE_PATCHES.txt"
+
       - name: Apply narrow GCC compatibility shim
         working-directory: source
         run: |
@@ -79,15 +115,18 @@ jobs:
           p.write_text(s)
           PY
 
-      - name: Compile full patched pinned ROM (validates assembled scripts and symbols)
+      - name: Compile full patched pinned ROM
         working-directory: source
         run: make -j2 CFLAGS="-std=gnu17"
 
-      - name: Upload audit report
+      - name: Upload compile validation output
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: event-script-audit-report
-          path: source/event-script-audit.txt
+          name: event-script-validation-build
+          path: |
+            source/*.gba
+            source/*.elf
+            source-revision.txt
           if-no-files-found: warn
-          retention-days: 14
+          retention-days: 7
