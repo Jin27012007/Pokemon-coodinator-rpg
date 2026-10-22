@@ -293,6 +293,11 @@ def main() -> int:
             if re.search(r"\bwaitstate\s*=\s*1\b", match.group(2)):
                 special_waits.add(match.group(1))
 
+    macro_risks = macro_risk_catalog(EVENT_MACROS, special_waits)
+    macro_frame_waits = {name for name, risks in macro_risks.items() if "frame-wait" in risks}
+    macro_context_risks = {name for name, risks in macro_risks.items() if "context" in risks}
+    macro_async_risks = {name for name, risks in macro_risks.items() if "async" in risks or "special" in risks}
+
     unresolved = []
     movement_ref_findings = []
     special_ref_findings = []
@@ -363,6 +368,15 @@ def main() -> int:
                             context_hook_findings.append((map_path, tag, root, src_path, line_no, command_name, " -> ".join(chain)))
                         elif command_name in ASYNC_RISK_COMMANDS:
                             async_hook_findings.append((map_path, tag, root, src_path, line_no, command_name, " -> ".join(chain)))
+
+                        # Macros can hide waits/native calls behind one apparent command.
+                        if command_name not in {"special", "specialvar"}:
+                            if command_name in macro_frame_waits:
+                                blocking_hook_findings.append((map_path, tag, root, src_path, line_no, "macro expands to frame wait: " + command_name, " -> ".join(chain)))
+                            if command_name in macro_context_risks:
+                                context_hook_findings.append((map_path, tag, root, src_path, line_no, "macro expands to context control: " + command_name, " -> ".join(chain)))
+                            if command_name in macro_async_risks:
+                                async_hook_findings.append((map_path, tag, root, src_path, line_no, "macro expands to native/special: " + command_name, " -> ".join(chain)))
                     for next_label in flow_targets(body, all_labels):
                         if next_label not in seen:
                             queue.append((next_label, chain + (next_label,)))
@@ -474,6 +488,10 @@ def main() -> int:
     print(f"global-context control candidates reachable from synchronous hooks: {len(context_hook_findings)}")
     print(f"native/warp-risk candidates reachable from synchronous hooks: {len(async_hook_findings)}")
     print(f"specials with implicit waitstate defined: {len(special_waits)}")
+    print(f"event macros indexed: {len(macro_risks)}")
+    print(f"macros expanding to frame waits: {len(macro_frame_waits)}")
+    print(f"macros expanding to context controls: {len(macro_context_risks)}")
+    print(f"macros expanding to native/special flows: {len(macro_async_risks)}")
 
     for name, locations in sorted(cross_file_duplicates.items()):
         print("CROSS_FILE_DUPLICATE_LABEL", name, "=>", ", ".join(locations))
