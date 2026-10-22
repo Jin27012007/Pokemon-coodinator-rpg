@@ -280,9 +280,14 @@ def main() -> int:
     for config_header in config_headers:
         flag_defs |= defs(config_header, "FLAG_")
         var_defs |= defs(config_header, "VAR_")
-    json_errors, object_script_review = [], []
+    json_errors = []
+    script_ref_findings = []
+    connection_map_findings = []
+    warp_map_findings = []
+    destination_warp_findings = []
     map_ids = Counter()
     json_sources: dict[str, str] = {}
+    map_data: dict[str, tuple[str, dict]] = {}
     for p in maps:
         rel = str(p.relative_to(ROOT))
         raw = read(p)
@@ -292,11 +297,39 @@ def main() -> int:
             json_errors.append((rel, str(exc)))
             continue
         json_sources[rel] = raw
-        map_ids[obj.get("id", "")] += 1
-        for event in obj.get("object_events", []):
-            script = event.get("script")
-            if isinstance(script, str) and script not in {"0", "0x0", "NULL", "null", ""} and script not in all_labels:
-                object_script_review.append((rel, script))
+        map_id = obj.get("id", "")
+        map_ids[map_id] += 1
+        map_data[map_id] = (rel, obj)
+        for field_path, script in collect_script_fields(obj):
+            if script not in {"0", "0x0", "NULL", "null", ""} and script not in all_labels:
+                script_ref_findings.append((rel, field_path, script))
+
+    # Check every map connection and warp destination against the same map.json catalog.
+    for source_id, (rel, obj) in map_data.items():
+        for connection in obj.get("connections") or []:
+            dest = connection.get("map")
+            if dest and dest not in map_data:
+                connection_map_findings.append((rel, source_id, dest))
+        for warp_index, warp in enumerate(obj.get("warp_events", [])):
+            dest = warp.get("dest_map")
+            if not dest:
+                continue
+            if dest not in map_data:
+                warp_map_findings.append((rel, f"warp[{warp_index}]", dest))
+                continue
+            dest_warp = warp.get("dest_warp_id")
+            try:
+                dest_index = int(str(dest_warp), 0)
+            except (TypeError, ValueError):
+                continue
+            # 255 is WARP_ID_NONE: coordinates are supplied instead of a target warp.
+            if dest_index != 255:
+                target_obj = map_data[dest][1]
+                target_warps = target_obj.get("warp_events") or []
+                if dest_index < 0 or dest_index >= len(target_warps):
+                    destination_warp_findings.append(
+                        (rel, f"warp[{warp_index}]", dest, dest_index, len(target_warps))
+                    )
     dup_ids = sorted(k for k,v in map_ids.items() if k and v > 1)
 
     symbol_sources = {str(p.relative_to(ROOT)): t for p,t in clean_texts.items()}
@@ -324,7 +357,10 @@ def main() -> int:
     print(f"flag symbols used / not found in selected headers: {len(flags_used)} / {len(unknown_flags)}")
     print(f"var symbols used / not found in selected headers: {len(vars_used)} / {len(unknown_vars)}")
     print(f"invalid JSON files: {len(json_errors)}")
-    print(f"object script references needing review: {len(object_script_review)}")
+    print(f"map event script references needing review: {len(script_ref_findings)}")
+    print(f"unknown connection map references: {len(connection_map_findings)}")
+    print(f"unknown warp destination maps: {len(warp_map_findings)}")
+    print(f"destination warp index candidates outside target map range: {len(destination_warp_findings)}")
     print(f"duplicate map IDs: {len(dup_ids)}")
     print(f"synchronous map hook roots inspected: {hook_count}")
     print(f"ON_WARP_INTO_MAP_TABLE roots manually discovered: {table_hook_reviews}")
@@ -346,8 +382,14 @@ def main() -> int:
         print("VAR_NOT_IN_SELECTED_HEADERS", name)
     for row in json_errors[:100]:
         print("INVALID_JSON", *row)
-    for row in object_script_review[:250]:
-        print("OBJECT_SCRIPT_REVIEW", *row)
+    for row in script_ref_findings[:250]:
+        print("MAP_EVENT_SCRIPT_REFERENCE_REVIEW", *row)
+    for row in connection_map_findings[:250]:
+        print("UNKNOWN_CONNECTION_MAP", *row)
+    for row in warp_map_findings[:250]:
+        print("UNKNOWN_WARP_MAP", *row)
+    for row in destination_warp_findings[:250]:
+        print("DESTINATION_WARP_INDEX_REVIEW", *row)
     for row in blocking_hook_findings[:250]:
         print("BLOCKING_SYNC_HOOK_CANDIDATE", *row)
     for row in async_hook_findings[:250]:
