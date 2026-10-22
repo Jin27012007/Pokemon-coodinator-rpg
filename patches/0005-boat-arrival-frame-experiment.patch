@@ -1,26 +1,37 @@
 diff --git a/data/maps/LilycoveCity_Harbor/scripts.inc b/data/maps/LilycoveCity_Harbor/scripts.inc
-index ef54f850..a3d5f001 100644
+index 6127c624..a3d5f001 100644
 --- a/data/maps/LilycoveCity_Harbor/scripts.inc
 +++ b/data/maps/LilycoveCity_Harbor/scripts.inc
-@@ -1,8 +1,10 @@
+@@ -1,9 +1,47 @@
  LilycoveCity_Harbor_MapScripts::
  	map_script MAP_SCRIPT_ON_TRANSITION, LilycoveCity_Harbor_OnTransition
++	map_script MAP_SCRIPT_ON_WARP_INTO_MAP_TABLE, LilycoveCity_Harbor_OnWarp
 +	map_script MAP_SCRIPT_ON_FRAME_TABLE, LilycoveCity_Harbor_OnFrame
  	.byte 0
  
  LilycoveCity_Harbor_OnTransition:
  	setescapewarp MAP_LILYCOVE_CITY, 12, 33
-+	goto_if_unset FLAG_HIDE_LILYCOVE_HARBOR_SSTIDAL, LilycoveCity_Harbor_OnTransitionDone
-+	clearflag FLAG_HIDE_LILYCOVE_HARBOR_SSTIDAL
-+	setobjectxyperm LOCALID_LILYCOVE_HARBOR_SS_TIDAL, 15, 9
-+	addobject LOCALID_LILYCOVE_HARBOR_SS_TIDAL
-+	setvar VAR_TEMP_0, 1
++	goto_if_set FLAG_HIDE_LILYCOVE_HARBOR_SSTIDAL, LilycoveCity_Harbor_OnTransition_StartArrival
++	setvar VAR_TEMP_0, 0
 +	goto LilycoveCity_Harbor_OnTransitionDone
++LilycoveCity_Harbor_OnTransition_StartArrival:
++	setvar VAR_TEMP_0, 1
 +LilycoveCity_Harbor_OnTransitionDone:
  	end
  
++LilycoveCity_Harbor_OnWarp:
++	map_script_2 VAR_TEMP_0, 1, LilycoveCity_Harbor_EventScript_SetupInitialArrival
++	.2byte 0
++
++LilycoveCity_Harbor_EventScript_SetupInitialArrival::
++	clearflag FLAG_HIDE_LILYCOVE_HARBOR_SSTIDAL
++	setobjectxyperm LOCALID_LILYCOVE_HARBOR_SS_TIDAL, 15, 9
++	addobject LOCALID_LILYCOVE_HARBOR_SS_TIDAL
++	setvar VAR_TEMP_0, 2
++	end
++
 +LilycoveCity_Harbor_OnFrame:
-+	map_script_2 VAR_TEMP_0, 1, LilycoveCity_Harbor_EventScript_InitialArrival
++	map_script_2 VAR_TEMP_0, 2, LilycoveCity_Harbor_EventScript_InitialArrival
 +	.2byte 0
 +
 +LilycoveCity_Harbor_EventScript_InitialArrival::
@@ -40,3 +51,5 @@ index ef54f850..a3d5f001 100644
 +	walk_left
 +	walk_left
 +	step_end
++
+ LilycoveCity_Harbor_EventScript_FerryAttendant::
