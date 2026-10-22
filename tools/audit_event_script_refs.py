@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Conservative event-script sanity checks for pokeemerald-expansion.
 
-Run from the project root. This reports manual-review candidates only; it is
-not a complete parser and never edits or removes events automatically.
+Run from the project root. Reports manual-review candidates only; it does not
+edit or remove scripts and is not a complete parser of the event language.
 """
 from __future__ import annotations
 import json
@@ -14,9 +14,13 @@ ROOT = Path(__file__).resolve().parents[1]
 MAPS = ROOT / "data/maps"
 COMMON = ROOT / "data/event_scripts.s"
 FLAGS = ROOT / "include/constants/flags.h"
+FLAGS_FRLG = ROOT / "include/constants/flags_frlg.h"
 VARS = ROOT / "include/constants/vars.h"
+VARS_FRLG = ROOT / "include/constants/vars_frlg.h"
 
 LABEL = re.compile(r"^\s*([A-Za-z_][A-Za-z0-9_]*)\s*::?\s*(?:@.*)?$", re.M)
+# This deliberately conservative target parser handles simple label arguments;
+# complex cases/switch expressions are left to the assembler and manual review.
 FLOW = re.compile(r"^\s*(goto|call|goto_if_[A-Za-z0-9_]+|call_if_[A-Za-z0-9_]+|map_script)\s+([^\n@]+)", re.M)
 FLAG_NAME = re.compile(r"\b(FLAG_[A-Z0-9_]+)\b")
 VAR_NAME = re.compile(r"\b(VAR_[A-Z0-9_]+)\b")
@@ -40,6 +44,7 @@ def main() -> int:
     if not files:
         print("ERROR: no map scripts found")
         return 2
+
     texts = {p: read(p) for p in files}
     labels: dict[str, list[str]] = defaultdict(list)
     for p, txt in texts.items():
@@ -50,18 +55,29 @@ def main() -> int:
     all_labels = set(labels) | common_labels
     all_text = "\n".join(texts.values()) + "\n" + common
 
+    # Count duplicates among map-local labels and common labels separately.
     duplicates = {k:v for k,v in labels.items() if len(v) > 1}
-    missing = []
+    common_counts = Counter(LABEL.findall(common))
+    common_duplicates = sorted(k for k,v in common_counts.items() if v > 1)
+
+    unresolved = []
     for p, txt in texts.items():
+        rel = str(p.relative_to(ROOT))
         for m in FLOW.finditer(txt):
             op, args = m.group(1), m.group(2).strip()
             target = args.split(",")[-1].strip().split()[0] if args else ""
             if target and re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", target) and target not in all_labels and target not in IGNORED:
-                missing.append((str(p.relative_to(ROOT)), txt[:m.start()].count("\n")+1, op, target))
+                unresolved.append((rel, txt[:m.start()].count("\n")+1, op, target))
 
-    flag_defs, var_defs = defs(FLAGS, "FLAG_"), defs(VARS, "VAR_")
-    unknown_flags = sorted(set(FLAG_NAME.findall(all_text)) - flag_defs)
-    unknown_vars = sorted(set(VAR_NAME.findall(all_text)) - var_defs)
+    # Flags/vars can be conditional on Emerald vs FRLG; check the union to avoid
+    # falsely warning on symbols defined only for the alternate game build.
+    flag_defs = defs(FLAGS, "FLAG_") | defs(FLAGS_FRLG, "FLAG_")
+    var_defs = defs(VARS, "VAR_") | defs(VARS_FRLG, "VAR_")
+    flags_used = set(FLAG_NAME.findall(all_text))
+    vars_used = set(VAR_NAME.findall(all_text))
+    unknown_flags = sorted(flags_used - flag_defs)
+    unknown_vars = sorted(vars_used - var_defs)
+
     json_errors, object_script_review = [], []
     map_ids = Counter()
     for p in maps:
@@ -71,7 +87,9 @@ def main() -> int:
         except json.JSONDecodeError as exc:
             json_errors.append((rel, str(exc)))
             continue
-        map_ids[obj.get("id", "")] += 1
+        map_id = obj.get("id", "")
+        map_ids[map_id] += 1
+        # Validate object script links; IDs like 0/0x0 denote no script.
         for event in obj.get("object_events", []):
             script = event.get("script")
             if isinstance(script, str) and script not in {"0", "0x0"} and script not in all_labels:
@@ -84,27 +102,31 @@ def main() -> int:
     print(f"map-local labels: {len(labels)}")
     print(f"common event labels: {len(common_labels)}")
     print(f"duplicate map-local labels: {len(duplicates)}")
-    print(f"possible unresolved references: {len(missing)}")
-    print(f"flag symbols outside selected header: {len(unknown_flags)}")
-    print(f"var symbols outside selected header: {len(unknown_vars)}")
+    print(f"duplicate common labels: {len(common_duplicates)}")
+    print(f"possible unresolved flow references: {len(unresolved)}")
+    print(f"flag symbols used / not found in selected headers: {len(flags_used)} / {len(unknown_flags)}")
+    print(f"var symbols used / not found in selected headers: {len(vars_used)} / {len(unknown_vars)}")
     print(f"invalid JSON files: {len(json_errors)}")
     print(f"object script references needing review: {len(object_script_review)}")
     print(f"duplicate map IDs: {len(dup_ids)}")
+
     for name, locations in sorted(duplicates.items()):
-        print("DUPLICATE_LABEL", name, "=>", ", ".join(locations))
-    for row in missing[:250]:
+        print("DUPLICATE_MAP_LABEL", name, "=>", ", ".join(locations))
+    for name in common_duplicates:
+        print("DUPLICATE_COMMON_LABEL", name)
+    for row in unresolved[:250]:
         print("UNRESOLVED_CANDIDATE", *row)
     for name in unknown_flags[:200]:
-        print("FLAG_NOT_IN_SELECTED_HEADER", name)
+        print("FLAG_NOT_IN_SELECTED_HEADERS", name)
     for name in unknown_vars[:200]:
-        print("VAR_NOT_IN_SELECTED_HEADER", name)
+        print("VAR_NOT_IN_SELECTED_HEADERS", name)
     for row in json_errors[:100]:
         print("INVALID_JSON", *row)
     for row in object_script_review[:250]:
         print("OBJECT_SCRIPT_REVIEW", *row)
     for name in dup_ids:
         print("DUPLICATE_MAP_ID", name)
-    print("Potential false positives include generated constants, cross-includes, macros, native-C references, and alternative game configurations. Review every report; do not auto-delete.")
+    print("Potential false positives include preprocessor branches, generated constants, cross-includes, macros, native-C references, and complex switch syntax. Review every report; do not auto-delete.")
     return 0
 
 if __name__ == "__main__":
