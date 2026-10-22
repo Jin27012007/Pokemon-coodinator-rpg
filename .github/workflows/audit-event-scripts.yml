@@ -25,6 +25,9 @@ jobs:
       - name: Checkout audit tooling
         uses: actions/checkout@v4
 
+      - name: Test audit helper logic
+        run: python3 -m unittest discover -s tests -p "test_audit_event_script_refs.py"
+
       - name: Install GBA build toolchain
         run: |
           sudo apt-get update
