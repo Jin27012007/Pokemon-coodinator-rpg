@@ -2,7 +2,7 @@ diff --git a/data/maps/LilycoveCity_Harbor/scripts.inc b/data/maps/LilycoveCity_
 index 6127c624..6127c624 100644
 --- a/data/maps/LilycoveCity_Harbor/scripts.inc
 +++ b/data/maps/LilycoveCity_Harbor/scripts.inc
-@@ -1,10 +1,32 @@
+@@ -1,11 +1,38 @@
  LilycoveCity_Harbor_MapScripts::
  	map_script MAP_SCRIPT_ON_TRANSITION, LilycoveCity_Harbor_OnTransition
 +	map_script MAP_SCRIPT_ON_FRAME_TABLE, LilycoveCity_Harbor_OnFrame
