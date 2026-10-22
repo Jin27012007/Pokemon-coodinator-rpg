@@ -10,6 +10,10 @@ on:
       - "docs/AUDITORIA_GLOBAL_EVENTOS.md"
       - ".github/workflows/audit-event-scripts.yml"
 
+concurrency:
+  group: event-script-audit-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 

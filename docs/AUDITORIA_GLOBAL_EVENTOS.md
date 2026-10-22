@@ -59,7 +59,7 @@ Macros em `asm/macros/event.inc` definem operações como `call`, `goto`, `goto_
 
 ## Scanner estático adicionado
 
-Foi incluído `tools/audit_event_script_refs.py`. Ele procura candidatos a labels duplicadas, referências de fluxo possivelmente não resolvidas, referências a flags/variáveis não encontradas nos cabeçalhos selecionados, JSON inválido, scripts de objetos que merecem revisão e IDs de mapa duplicados.
+Foi incluído `tools/audit_event_script_refs.py`. Ele cobre scripts de mapa, scripts compartilhados, labels no agregador global e referências declaradas em `map.json`; confere labels/chamadas, flags/vars (incluindo cabeçalhos de configuração), movimentos, specials, referências de scripts de eventos, conexões/warps e IDs locais/IDs de mapa. O analisador do grafo de gatilhos síncronos também percorre chamadas alcançáveis e identifica esperas que dependem de quadros, operações de contexto, warps/natives e macros de evento que se expandem para essas famílias de comandos. O comando `callstd` (usado por macros como mensagens) é classificado para revisão de contexto.
 
 **Limitação explícita:** esse scanner é heurístico, não um parser completo da linguagem de eventos. Pode emitir falsos positivos por macros, constantes geradas, includes compartilhados e scripts nativos em C. Não edita nem apaga eventos automaticamente e não deve bloquear builds até a saída ser calibrada e revisada.
 

@@ -55,7 +55,7 @@ FRAME_WAIT_COMMANDS = {
 # In an immediate map callback they need semantic review, but are not the same as
 # a native wait that spins until frame-driven work finishes.
 CONTEXT_SENSITIVE_COMMANDS = {
-    "waitstate", "waitbuttonpress", "yesnobox", "dynmultichoice", "multichoice",
+    "waitstate", "waitbuttonpress", "callstd", "yesnobox", "dynmultichoice", "multichoice",
     "multichoicedefault", "multichoicegrid", "drawboxtext", "showcontestpainting",
     "dotrainerbattle", "dowildbattle", "pokemart", "pokemartdecoration",
     "pokemartdecoration2", "playslotmachine", "choosecontestmon", "startcontest",
