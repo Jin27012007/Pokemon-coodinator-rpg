@@ -159,7 +159,7 @@ def macro_risk_catalog(path: Path, special_waits: set[str]) -> dict[str, set[str
                     risk[name].add("context")
             if command in ASYNC_RISK_COMMANDS:
                 risk[name].add("async")
-            if command == "callnative" and re.search(r"\\bwaitstate\\s*=\\s*1\\b", args):
+            if command == "callnative" and re.search(r"\bwaitstate\s*=\s*1\b", args):
                 risk[name].add("context")
             if command in {"special", "specialvar"}:
                 special_name = args.split()[0].strip(",") if args else ""
@@ -393,7 +393,7 @@ def main() -> int:
                                 context_hook_findings.append((map_path, tag, root, src_path, line_no, "special(waitstate=1):" + special_name, " -> ".join(chain)))
                         elif command_name in CONTEXT_SENSITIVE_COMMANDS:
                             context_hook_findings.append((map_path, tag, root, src_path, line_no, command_name, " -> ".join(chain)))
-                        elif command_name == "callnative" and re.search(r"\\bwaitstate\\s*=\\s*1\\b", args):
+                        elif command_name == "callnative" and re.search(r"\bwaitstate\s*=\s*1\b", args):
                             context_hook_findings.append((map_path, tag, root, src_path, line_no, "callnative(waitstate=1)", " -> ".join(chain)))
                         elif command_name in ASYNC_RISK_COMMANDS:
                             async_hook_findings.append((map_path, tag, root, src_path, line_no, command_name, " -> ".join(chain)))
