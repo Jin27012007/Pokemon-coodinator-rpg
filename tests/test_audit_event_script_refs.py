@@ -85,6 +85,19 @@ callnative GetDaycareGraphics, requests_effects=1, waitstate=1
         self.assertNotIn("context", risks["getdaycaregfx"])
         self.assertIn("context", risks["blockingnative"])
 
+    def test_map_script_table_entries_are_resolved(self):
+        body = """
+map_script_2 VAR_TEMP_0, 0, Scene_EventScript_First
+map_script_2 VAR_TEMP_1, 1, Scene_EventScript_Second
+.2byte 0
+"""
+        labels = {"Scene_EventScript_First", "Scene_EventScript_Second"}
+        self.assertEqual(
+            audit.table_script_targets(body, labels),
+            ["Scene_EventScript_First", "Scene_EventScript_Second"],
+        )
+        self.assertEqual(audit.table_script_targets(body, {"Scene_EventScript_First"}), ["Scene_EventScript_First"])
+
     def test_dynamic_warp_is_explicitly_classified(self):
         self.assertTrue(audit.is_dynamic_map_reference("MAP_DYNAMIC"))
         self.assertFalse(audit.is_dynamic_map_reference("MAP_LILYCOVE_CITY"))
