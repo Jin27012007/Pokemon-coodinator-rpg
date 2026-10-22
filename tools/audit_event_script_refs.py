@@ -301,6 +301,7 @@ def main() -> int:
         var_defs |= defs(config_header, "VAR_")
     json_errors = []
     script_ref_findings = []
+    duplicate_local_ids = []
     connection_map_findings = []
     warp_map_findings = []
     destination_warp_findings = []
@@ -319,6 +320,14 @@ def main() -> int:
         map_id = obj.get("id", "")
         map_ids[map_id] += 1
         map_data[map_id] = (rel, obj)
+        local_id_locations: dict[str, list[int]] = defaultdict(list)
+        for event_index, event in enumerate(obj.get("object_events", [])):
+            local_id = event.get("local_id")
+            if isinstance(local_id, str) and local_id not in {"", "0", "0x0"}:
+                local_id_locations[local_id].append(event_index)
+        for local_id, locations in local_id_locations.items():
+            if len(locations) > 1:
+                duplicate_local_ids.append((rel, map_id, local_id, locations))
         for field_path, script in collect_script_fields(obj):
             if script not in {"0", "0x0", "NULL", "null", ""} and script not in all_labels:
                 script_ref_findings.append((rel, field_path, script))
@@ -342,7 +351,7 @@ def main() -> int:
             except (TypeError, ValueError):
                 continue
             # 255 is WARP_ID_NONE: coordinates are supplied instead of a target warp.
-            if dest_index != 255:
+            if dest_index not in {-1, 255}:
                 target_obj = map_data[dest][1]
                 target_warps = target_obj.get("warp_events") or []
                 if dest_index < 0 or dest_index >= len(target_warps):
@@ -380,6 +389,7 @@ def main() -> int:
     print(f"var symbols used / not found in selected headers: {len(vars_used)} / {len(unknown_vars)}")
     print(f"invalid JSON files: {len(json_errors)}")
     print(f"map event script references needing review: {len(script_ref_findings)}")
+    print(f"duplicate symbolic local IDs within maps: {len(duplicate_local_ids)}")
     print(f"unknown connection map references: {len(connection_map_findings)}")
     print(f"unknown warp destination maps: {len(warp_map_findings)}")
     print(f"destination warp index candidates outside target map range: {len(destination_warp_findings)}")
@@ -412,6 +422,8 @@ def main() -> int:
         print("INVALID_JSON", *row)
     for row in script_ref_findings[:250]:
         print("MAP_EVENT_SCRIPT_REFERENCE_REVIEW", *row)
+    for row in duplicate_local_ids[:250]:
+        print("DUPLICATE_OBJECT_LOCAL_ID_REVIEW", *row)
     for row in connection_map_findings[:250]:
         print("UNKNOWN_CONNECTION_MAP", *row)
     for row in warp_map_findings[:250]:
