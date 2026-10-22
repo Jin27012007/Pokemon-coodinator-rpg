@@ -148,12 +148,19 @@ def macro_risk_catalog(path: Path, special_waits: set[str]) -> dict[str, set[str
             if command in FRAME_WAIT_COMMANDS:
                 risk[name].add("frame-wait")
             if command in CONTEXT_SENSITIVE_COMMANDS:
-                # The base special/specialvar macro encodes a conditional waitstate;
-                # actual special names are checked against data/specials.inc separately.
-                if not (name in {"special", "specialvar"} and command == "waitstate"):
+                # special/specialvar and callnative emit waitstate only when a
+                # parameter/definition requires it. Do not treat conditional
+                # waitstate lines in their macro bodies as unconditional.
+                conditional_wait = (
+                    command == "waitstate"
+                    and name in {"special", "specialvar", "callnative"}
+                )
+                if not conditional_wait:
                     risk[name].add("context")
             if command in ASYNC_RISK_COMMANDS:
                 risk[name].add("async")
+            if command == "callnative" and re.search(r"\\bwaitstate\\s*=\\s*1\\b", args):
+                risk[name].add("context")
             if command in {"special", "specialvar"}:
                 special_name = args.split()[0].strip(",") if args else ""
                 if special_name in special_waits:
@@ -223,6 +230,41 @@ def collect_script_fields(value, prefix: str = ""):
         for i, child in enumerate(value):
             yield from collect_script_fields(child, f"{prefix}[{i}]")
 
+def find_movement_terminator_candidates(
+    label_bodies: dict[str, list[tuple[str, str, int]]]
+) -> list[tuple[str, int, str, str]]:
+    """Find likely unterminated movement streams without flagging offset labels."""
+    labels_by_file: dict[str, list[tuple[int, str, str]]] = defaultdict(list)
+    for label, definitions in label_bodies.items():
+        for src_path, body, start_line in definitions:
+            labels_by_file[src_path].append((start_line, label, body))
+    findings = []
+    for src_path, entries in labels_by_file.items():
+        entries.sort(key=lambda item: item[0])
+        for index, (start_line, label, body) in enumerate(entries):
+            if "Movement_" not in label or label.endswith("FollowerSafeStart"):
+                continue
+            instructions = [
+                line.strip() for line in body.splitlines()
+                if line.strip() and not line.strip().startswith(".")
+            ]
+            if not instructions:
+                continue
+            terminal = instructions[-1].split()[0].lower()
+            if terminal in {"step_end", "end"}:
+                continue
+            next_label = entries[index + 1][1] if index + 1 < len(entries) else ""
+            # Consecutive Movement_* labels can be alternate entry points into
+            # the same byte stream; the final label owns the step_end.
+            if "Movement_" in next_label:
+                continue
+            findings.append((src_path, start_line, label, terminal))
+    return findings
+
+def is_dynamic_map_reference(map_id: str) -> bool:
+    """Whether a warp target is intentionally resolved at runtime."""
+    return map_id == "MAP_DYNAMIC"
+
 def main() -> int:
     if not MAPS.is_dir():
         print(f"ERROR: map directory missing: {MAPS}")
@@ -265,33 +307,7 @@ def main() -> int:
     common_counts = Counter(LABEL.findall(common))
     common_duplicates = sorted(k for k,v in common_counts.items() if v > 1)
 
-    movement_terminator_findings = []
-    # Some movement streams intentionally expose multiple labels at different
-    # offsets into one continuous command stream. A label body ending in walk_*
-    # is not malformed if the next label is another Movement_* label; the
-    # terminating step_end belongs to the final label in that sequence.
-    labels_by_file: dict[str, list[tuple[int, str, str]]] = defaultdict(list)
-    for label, definitions in label_bodies.items():
-        for src_path, body, start_line in definitions:
-            labels_by_file[src_path].append((start_line, label, body))
-    for src_path, entries in labels_by_file.items():
-        entries.sort(key=lambda item: item[0])
-        for index, (start_line, label, body) in enumerate(entries):
-            if "Movement_" not in label or label.endswith("FollowerSafeStart"):
-                continue
-            instructions = [
-                line.strip() for line in body.splitlines()
-                if line.strip() and not line.strip().startswith(".")
-            ]
-            if not instructions:
-                continue
-            terminal = instructions[-1].split()[0].lower()
-            if terminal in {"step_end", "end"}:
-                continue
-            next_label = entries[index + 1][1] if index + 1 < len(entries) else ""
-            if "Movement_" in next_label:
-                continue
-            movement_terminator_findings.append((src_path, start_line, label, terminal))
+    movement_terminator_findings = find_movement_terminator_candidates(label_bodies)
 
     # Specials with waitstate=1 cause the special macro to emit a waitstate
     # automatically. These also need review if reachable from a synchronous hook.
@@ -377,6 +393,8 @@ def main() -> int:
                                 context_hook_findings.append((map_path, tag, root, src_path, line_no, "special(waitstate=1):" + special_name, " -> ".join(chain)))
                         elif command_name in CONTEXT_SENSITIVE_COMMANDS:
                             context_hook_findings.append((map_path, tag, root, src_path, line_no, command_name, " -> ".join(chain)))
+                        elif command_name == "callnative" and re.search(r"\\bwaitstate\\s*=\\s*1\\b", args):
+                            context_hook_findings.append((map_path, tag, root, src_path, line_no, "callnative(waitstate=1)", " -> ".join(chain)))
                         elif command_name in ASYNC_RISK_COMMANDS:
                             async_hook_findings.append((map_path, tag, root, src_path, line_no, command_name, " -> ".join(chain)))
 
@@ -443,7 +461,7 @@ def main() -> int:
                 continue
             # Dynamic-map warps intentionally resolve at runtime from link,
             # elevator, secret-base, or similar state. They are not static IDs.
-            if dest == "MAP_DYNAMIC":
+            if is_dynamic_map_reference(dest):
                 continue
             if dest not in map_data:
                 warp_map_findings.append((rel, f"warp[{warp_index}]", dest))
