@@ -18,6 +18,7 @@ FLAGS = ROOT / "include/constants/flags.h"
 FLAGS_FRLG = ROOT / "include/constants/flags_frlg.h"
 VARS = ROOT / "include/constants/vars.h"
 VARS_FRLG = ROOT / "include/constants/vars_frlg.h"
+CONFIG_HEADERS = ROOT / "include/config"
 
 LABEL = re.compile(r"^\s*([A-Za-z_][A-Za-z0-9_]*)\s*::?\s*(?:@.*)?$", re.M)
 FLOW = re.compile(r"^\s*(goto|call|goto_if_[A-Za-z0-9_]+|call_if_[A-Za-z0-9_]+|map_script)\s+([^\n@]+)", re.M)
@@ -200,8 +201,12 @@ def main() -> int:
                         if next_label not in seen:
                             queue.append((next_label, chain + (next_label,)))
 
+    config_headers = sorted(CONFIG_HEADERS.rglob("*.h")) if CONFIG_HEADERS.is_dir() else []
     flag_defs = defs(FLAGS, "FLAG_") | defs(FLAGS_FRLG, "FLAG_")
     var_defs = defs(VARS, "VAR_") | defs(VARS_FRLG, "VAR_")
+    for config_header in config_headers:
+        flag_defs |= defs(config_header, "FLAG_")
+        var_defs |= defs(config_header, "VAR_")
     json_errors, object_script_review = [], []
     map_ids = Counter()
     json_sources: dict[str, str] = {}
@@ -235,6 +240,7 @@ def main() -> int:
     print(f"scripts.inc files: {len(files)}")
     print(f"map.json files: {len(maps)}")
     print(f"shared scripts files: {len(shared_files)}")
+    print(f"config headers searched for extra flag/var definitions: {len(config_headers)}")
     print(f"map/shared labels indexed: {len(label_locations)}")
     print(f"labels in data/event_scripts.s itself: {len(common_labels)}")
     print(f"duplicate map/shared labels: {len(duplicates)}")
