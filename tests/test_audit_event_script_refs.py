@@ -15,7 +15,7 @@ class EventAuditHelperTests(unittest.TestCase):
         source = 'msgbox "hello @ world // still text" @ actual comment\nend\n'
         self.assertEqual(
             audit.strip_comments(source),
-            'msgbox "hello @ world // still text" \nend\n',
+            'msgbox "hello @ world // still text" \nend',
         )
 
     def test_flow_target_reads_conditional_jump_label(self):
