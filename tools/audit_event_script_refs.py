@@ -266,12 +266,19 @@ def main() -> int:
     common_duplicates = sorted(k for k,v in common_counts.items() if v > 1)
 
     movement_terminator_findings = []
-    # Movement scripts normally finish with step_end. Sentinels used to delimit
-    # the follower-safe movement range are labels, not executable movements.
+    # Some movement streams intentionally expose multiple labels at different
+    # offsets into one continuous command stream. A label body ending in walk_*
+    # is not malformed if the next label is another Movement_* label; the
+    # terminating step_end belongs to the final label in that sequence.
+    labels_by_file: dict[str, list[tuple[int, str, str]]] = defaultdict(list)
     for label, definitions in label_bodies.items():
-        if "Movement_" not in label or label.endswith("FollowerSafeStart"):
-            continue
         for src_path, body, start_line in definitions:
+            labels_by_file[src_path].append((start_line, label, body))
+    for src_path, entries in labels_by_file.items():
+        entries.sort(key=lambda item: item[0])
+        for index, (start_line, label, body) in enumerate(entries):
+            if "Movement_" not in label or label.endswith("FollowerSafeStart"):
+                continue
             instructions = [
                 line.strip() for line in body.splitlines()
                 if line.strip() and not line.strip().startswith(".")
@@ -279,8 +286,12 @@ def main() -> int:
             if not instructions:
                 continue
             terminal = instructions[-1].split()[0].lower()
-            if terminal not in {"step_end", "end"}:
-                movement_terminator_findings.append((src_path, start_line, label, terminal))
+            if terminal in {"step_end", "end"}:
+                continue
+            next_label = entries[index + 1][1] if index + 1 < len(entries) else ""
+            if "Movement_" in next_label:
+                continue
+            movement_terminator_findings.append((src_path, start_line, label, terminal))
 
     # Specials with waitstate=1 cause the special macro to emit a waitstate
     # automatically. These also need review if reachable from a synchronous hook.
@@ -429,6 +440,10 @@ def main() -> int:
         for warp_index, warp in enumerate(obj.get("warp_events", [])):
             dest = warp.get("dest_map")
             if not dest:
+                continue
+            # Dynamic-map warps intentionally resolve at runtime from link,
+            # elevator, secret-base, or similar state. They are not static IDs.
+            if dest == "MAP_DYNAMIC":
                 continue
             if dest not in map_data:
                 warp_map_findings.append((rel, f"warp[{warp_index}]", dest))
