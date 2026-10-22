@@ -27,6 +27,7 @@ LABEL = re.compile(r"^\s*([A-Za-z_][A-Za-z0-9_]*)\s*::?\s*(?:@.*)?$", re.M)
 FLOW = re.compile(r"^\s*(goto|call|goto_if_[A-Za-z0-9_]+|call_if_[A-Za-z0-9_]+|map_script)\s+([^\n@]+)", re.M)
 CASE_REF = re.compile(r"^\s*case\s+[^,\n]+,\s*([A-Za-z_][A-Za-z0-9_]*)", re.M)
 MAP_HOOK = re.compile(r"^\s*map_script\s+(MAP_SCRIPT_[A-Z0-9_]+)\s*,\s*([A-Za-z_][A-Za-z0-9_]*)", re.M)
+TABLE_SCRIPT_REF = re.compile(r"^\s*map_script_2\s+[^,\n]+,\s*[^,\n]+,\s*([A-Za-z_][A-Za-z0-9_]*)", re.M)
 MOVEMENT_REF = re.compile(r"^\s*applymovement(?:at)?\s+[^,\n]+,\s*([A-Za-z_][A-Za-z0-9_]*)", re.M)
 SPECIAL_REF = re.compile(r"^\s*(special|specialvar)\s+([^\n@]+)", re.M)
 FLAG_NAME = re.compile(r"\b(FLAG_[A-Z0-9_]+)\b")
@@ -265,6 +266,13 @@ def is_dynamic_map_reference(map_id: str) -> bool:
     """Whether a warp target is intentionally resolved at runtime."""
     return map_id == "MAP_DYNAMIC"
 
+def table_script_targets(body: str, all_labels: set[str]) -> list[str]:
+    """Extract script labels from map_script_2 table entries."""
+    return [
+        target for target in TABLE_SCRIPT_REF.findall(body)
+        if target in all_labels
+    ]
+
 def main() -> int:
     if not MAPS.is_dir():
         print(f"ERROR: map directory missing: {MAPS}")
@@ -339,6 +347,10 @@ def main() -> int:
             target = m.group(1)
             if target not in all_labels and target not in IGNORED:
                 unresolved.append((rel, txt[:m.start()].count("\n")+1, "case", target))
+        for m in TABLE_SCRIPT_REF.finditer(txt):
+            target = m.group(1)
+            if target not in all_labels and target not in IGNORED:
+                unresolved.append((rel, txt[:m.start()].count("\n")+1, "map_script_2", target))
         for m in MOVEMENT_REF.finditer(txt):
             target = m.group(1)
             if target not in all_labels:
@@ -358,6 +370,7 @@ def main() -> int:
     async_hook_findings = []
     hook_count = 0
     table_hook_reviews = 0
+    warp_table_entry_roots = 0
     for map_path, tag, target in map_hooks:
         if tag not in SYNCHRONOUS_HOOKS:
             continue
@@ -365,10 +378,10 @@ def main() -> int:
         if tag == "MAP_SCRIPT_ON_WARP_INTO_MAP_TABLE":
             table_hook_reviews += 1
             for _, table_body, _ in label_bodies.get(target, []):
-                # The table stores script pointers as .4byte entries.
-                for ptr in re.findall(r"^\s*\.4byte\s+([A-Za-z_][A-Za-z0-9_]*)", table_body, re.M):
-                    if ptr in all_labels:
-                        roots.append(ptr)
+                # map_script_2 expands to .2byte/.2byte/.4byte; read source
+                # macro invocations so the root is visible before assembly.
+                roots.extend(table_script_targets(table_body, all_labels))
+            warp_table_entry_roots += len(roots)
         elif target in all_labels:
             roots.append(target)
         for root in roots:
@@ -409,6 +422,25 @@ def main() -> int:
                     for next_label in flow_targets(body, all_labels):
                         if next_label not in seen:
                             queue.append((next_label, chain + (next_label,)))
+
+    # ON_FRAME_TABLE scripts run in the global, frame-driven context. They
+    # are not synchronous/deadlock roots, but their call graph must be inventoried.
+    frame_table_roots = 0
+    frame_table_reachable_labels: set[str] = set()
+    for map_path, tag, target in map_hooks:
+        if tag != "MAP_SCRIPT_ON_FRAME_TABLE":
+            continue
+        for _, table_body, _ in label_bodies.get(target, []):
+            roots = table_script_targets(table_body, all_labels)
+            frame_table_roots += len(roots)
+            queue = deque(roots)
+            while queue:
+                label = queue.popleft()
+                if label in frame_table_reachable_labels:
+                    continue
+                frame_table_reachable_labels.add(label)
+                for _, body, _ in label_bodies.get(label, []):
+                    queue.extend(flow_targets(body, all_labels) - frame_table_reachable_labels)
 
     config_headers = sorted(CONFIG_HEADERS.rglob("*.h")) if CONFIG_HEADERS.is_dir() else []
     flag_defs = defs(FLAGS, "FLAG_") | defs(FLAGS_FRLG, "FLAG_")
@@ -516,7 +548,10 @@ def main() -> int:
     print(f"destination warp index candidates outside target map range: {len(destination_warp_findings)}")
     print(f"duplicate map IDs: {len(dup_ids)}")
     print(f"synchronous map hook roots inspected: {hook_count}")
-    print(f"ON_WARP_INTO_MAP_TABLE roots manually discovered: {table_hook_reviews}")
+    print(f"ON_WARP_INTO_MAP_TABLE tables inspected: {table_hook_reviews}")
+    print(f"ON_WARP_INTO_MAP_TABLE script-entry roots: {warp_table_entry_roots}")
+    print(f"ON_FRAME_TABLE script-entry roots: {frame_table_roots}")
+    print(f"unique labels reachable from ON_FRAME_TABLE roots: {len(frame_table_reachable_labels)}")
     print(f"frame-wait deadlock candidates reachable from synchronous hooks: {len(blocking_hook_findings)}")
     print(f"global-context control candidates reachable from synchronous hooks: {len(context_hook_findings)}")
     print(f"native/warp-risk candidates reachable from synchronous hooks: {len(async_hook_findings)}")
