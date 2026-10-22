@@ -14,7 +14,6 @@ ROOT = Path(__file__).resolve().parents[1]
 MAPS = ROOT / "data/maps"
 COMMON = ROOT / "data/event_scripts.s"
 COMMON_DIR = ROOT / "data/scripts"
-MACROS = ROOT / "asm/macros/event.inc"
 FLAGS = ROOT / "include/constants/flags.h"
 FLAGS_FRLG = ROOT / "include/constants/flags_frlg.h"
 VARS = ROOT / "include/constants/vars.h"
@@ -24,9 +23,7 @@ LABEL = re.compile(r"^\s*([A-Za-z_][A-Za-z0-9_]*)\s*::?\s*(?:@.*)?$", re.M)
 FLOW = re.compile(r"^\s*(goto|call|goto_if_[A-Za-z0-9_]+|call_if_[A-Za-z0-9_]+|map_script)\s+([^\n@]+)", re.M)
 FLAG_NAME = re.compile(r"\b(FLAG_[A-Z0-9_]+)\b")
 VAR_NAME = re.compile(r"\b(VAR_[A-Z0-9_]+)\b")
-IGNORED = {"TRUE", "FALSE", "YES", "NO", "MULTI_B_PRESSED", "NULL", "0", "0x0"}
-# These are command macros, not branch-to-label commands. Their arguments are
-# trainer IDs or other values, not script-label destinations.
+IGNORED = {"TRUE", "FALSE", "YES", "NO", "MULTI_B_PRESSED", "NULL", "null", "0", "0x0"}
 NON_LABEL_FLOW_MACROS = {
     "call_if_defeated", "call_if_not_defeated",
     "goto_if_defeated", "goto_if_not_defeated",
@@ -41,31 +38,48 @@ def read(path: Path) -> str:
 def defs(path: Path, prefix: str) -> set[str]:
     return set(re.findall(r"^\s*#define\s+(" + re.escape(prefix) + r"[A-Z0-9_]+)\b", read(path), re.M))
 
-def strip_asm_comments(text: str) -> str:
-    """Remove @ comments without stripping @ characters inside quoted strings."""
+def strip_comments(text: str) -> str:
+    """Strip C block and line comments plus assembler @ comments, respecting strings."""
+    text = re.sub(r"/\*[\s\S]*?\*/", "", text)
     out = []
     for line in text.splitlines():
         quote = None
         escaped = False
         cut = len(line)
-        for i, ch in enumerate(line):
+        i = 0
+        while i < len(line):
+            ch = line[i]
             if escaped:
                 escaped = False
+                i += 1
                 continue
             if ch == "\\":
                 escaped = True
+                i += 1
                 continue
             if quote:
                 if ch == quote:
                     quote = None
+                i += 1
                 continue
             if ch in {"'", '"'}:
                 quote = ch
-            elif ch == "@":
+                i += 1
+                continue
+            if ch == "@" or line.startswith("//", i):
                 cut = i
                 break
+            i += 1
         out.append(line[:cut])
     return "\n".join(out)
+
+def occurrences(symbol: str, sources: dict[str, str], pattern: re.Pattern) -> list[str]:
+    result = []
+    for name, text in sources.items():
+        for match in pattern.finditer(text):
+            if match.group(1) == symbol:
+                result.append(f"{name}:{text[:match.start()].count(chr(10)) + 1}")
+    return result[:12]
 
 def main() -> int:
     if not MAPS.is_dir():
@@ -78,35 +92,29 @@ def main() -> int:
         print(f"ERROR: no map scripts found under {MAPS}")
         return 2
 
-    texts = {p: read(p) for p in files}
-    shared_texts = {p: read(p) for p in shared_files}
+    raw_texts = {p: read(p) for p in files}
+    raw_shared = {p: read(p) for p in shared_files}
+    clean_texts = {p: strip_comments(txt) for p, txt in raw_texts.items()}
+    clean_shared = {p: strip_comments(txt) for p, txt in raw_shared.items()}
+
     labels: dict[str, list[str]] = defaultdict(list)
-    for p, txt in texts.items():
-        for label in LABEL.findall(strip_asm_comments(txt)):
-            labels[label].append(str(p.relative_to(ROOT)))
-    for p, txt in shared_texts.items():
-        for label in LABEL.findall(strip_asm_comments(txt)):
+    for p, txt in list(clean_texts.items()) + list(clean_shared.items()):
+        for label in LABEL.findall(txt):
             labels[label].append(str(p.relative_to(ROOT)))
 
-    common = read(COMMON)
-    common_clean = strip_asm_comments(common)
-    common_labels = set(LABEL.findall(common_clean))
+    common = strip_comments(read(COMMON))
+    common_labels = set(LABEL.findall(common))
     all_labels = set(labels) | common_labels
-    clean_texts = [strip_asm_comments(x) for x in texts.values()]
-    clean_shared = [strip_asm_comments(x) for x in shared_texts.values()]
-    all_text = "\n".join(clean_texts) + "\n" + "\n".join(clean_shared) + "\n" + common_clean
+    all_text = "\n".join(clean_texts.values()) + "\n" + "\n".join(clean_shared.values()) + "\n" + common
 
-    # Duplicates in mutually exclusive assembler conditionals can be legitimate.
-    # Categorize same-file duplicates separately for human inspection.
     duplicates = {k:v for k,v in labels.items() if len(v) > 1}
     cross_file_duplicates = {k:v for k,v in duplicates.items() if len(set(v)) > 1}
     same_file_duplicates = {k:v for k,v in duplicates.items() if len(set(v)) == 1}
-    common_counts = Counter(LABEL.findall(common_clean))
+    common_counts = Counter(LABEL.findall(common))
     common_duplicates = sorted(k for k,v in common_counts.items() if v > 1)
 
     unresolved = []
-    for p, raw_txt in list(texts.items()) + list(shared_texts.items()):
-        txt = strip_asm_comments(raw_txt)
+    for p, txt in list(clean_texts.items()) + list(clean_shared.items()):
         rel = str(p.relative_to(ROOT))
         for m in FLOW.finditer(txt):
             op, args = m.group(1), m.group(2).strip()
@@ -116,12 +124,11 @@ def main() -> int:
             if target and re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", target) and target not in all_labels and target not in IGNORED:
                 unresolved.append((rel, txt[:m.start()].count("\n")+1, op, target))
 
-    # Flags/vars can be conditional on Emerald vs FRLG; take both headers.
     flag_defs = defs(FLAGS, "FLAG_") | defs(FLAGS_FRLG, "FLAG_")
     var_defs = defs(VARS, "VAR_") | defs(VARS_FRLG, "VAR_")
-    json_texts = []
     json_errors, object_script_review = [], []
     map_ids = Counter()
+    json_sources: dict[str, str] = {}
     for p in maps:
         rel = str(p.relative_to(ROOT))
         raw = read(p)
@@ -130,7 +137,7 @@ def main() -> int:
         except json.JSONDecodeError as exc:
             json_errors.append((rel, str(exc)))
             continue
-        json_texts.append(raw)
+        json_sources[rel] = raw
         map_ids[obj.get("id", "")] += 1
         for event in obj.get("object_events", []):
             script = event.get("script")
@@ -138,8 +145,11 @@ def main() -> int:
                 object_script_review.append((rel, script))
     dup_ids = sorted(k for k,v in map_ids.items() if k and v > 1)
 
-    # Exclude comments from assembly/script sources; retain parsed JSON fields.
-    symbol_text = all_text + "\n" + "\n".join(json_texts)
+    symbol_sources = {str(p.relative_to(ROOT)): t for p,t in clean_texts.items()}
+    symbol_sources.update({str(p.relative_to(ROOT)): t for p,t in clean_shared.items()})
+    symbol_sources["data/event_scripts.s"] = common
+    symbol_sources.update(json_sources)
+    symbol_text = "\n".join(symbol_sources.values())
     flags_used = set(FLAG_NAME.findall(symbol_text))
     vars_used = set(VAR_NAME.findall(symbol_text))
     unknown_flags = sorted(flags_used - flag_defs)
@@ -171,9 +181,9 @@ def main() -> int:
     for row in unresolved[:250]:
         print("UNRESOLVED_CANDIDATE", *row)
     for name in unknown_flags[:200]:
-        print("FLAG_NOT_IN_SELECTED_HEADERS", name)
+        print("FLAG_NOT_IN_SELECTED_HEADERS", name, "occurrences:", ", ".join(occurrences(name, symbol_sources, FLAG_NAME)))
     for name in unknown_vars[:200]:
-        print("VAR_NOT_IN_SELECTED_HEADERS", name)
+        print("VAR_NOT_IN_SELECTED_HEADERS", name, "occurrences:", ", ".join(occurrences(name, symbol_sources, VAR_NAME)))
     for row in json_errors[:100]:
         print("INVALID_JSON", *row)
     for row in object_script_review[:250]:
